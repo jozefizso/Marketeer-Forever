@@ -24,8 +24,8 @@ sealed class Updater : Form {
   Controls.Add(new Label{Text="AHledger market data for Marketeer",Left=20,Top=15,Width=540,Height=24,Font=new Font(Font,FontStyle.Bold)});
   AddLabel("Region",20,53);AddLabel("Ruleset",175,53);AddLabel("Faction",365,53);
   Setup(region,20,75,140,new[]{"US","EU","CN"});Setup(ruleset,175,75,175,new[]{"Normal","PvP","RP","RP PvP"});Setup(faction,365,75,200,new[]{"Alliance","Horde"});
-  AddLabel("NokiTrading addon folder",20,118);folder.SetBounds(20,141,445,25);folder.Text=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),@"World of Warcraft\_forever_\Interface\AddOns\NokiTrading");Controls.Add(folder);
-  Button browse=new Button{Text="Browse",Left=475,Top=139,Width=90,Height=27};browse.Click+=(s,e)=>{using(var dialog=new FolderBrowserDialog()){dialog.Description="Select your NokiTrading addon folder";if(dialog.ShowDialog()==DialogResult.OK)folder.Text=dialog.SelectedPath;}};Controls.Add(browse);
+  AddLabel("Marketeer addon folder",20,118);folder.SetBounds(20,141,445,25);folder.Text=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),@"World of Warcraft\_forever_\Interface\AddOns\NokiTrading");Controls.Add(folder);
+  Button browse=new Button{Text="Browse",Left=475,Top=139,Width=90,Height=27};browse.Click+=(s,e)=>{using(var dialog=new FolderBrowserDialog()){dialog.Description="Select your Marketeer addon folder";if(dialog.ShowDialog()==DialogResult.OK)folder.Text=dialog.SelectedPath;}};Controls.Add(browse);
   update.Text="Update now";update.SetBounds(20,183,145,32);update.Click+=async(s,e)=>await RunUpdate();Controls.Add(update);
   auto.Text="Update every 30 minutes while open";auto.SetBounds(185,188,300,24);auto.CheckedChanged+=(s,e)=>{timer.Enabled=auto.Checked;SaveSettings();};Controls.Add(auto);
   status.SetBounds(20,227,550,72);status.Text="Choose your market, then click Update now. Reload the game after an update.";Controls.Add(status);
@@ -48,9 +48,9 @@ sealed class Updater : Form {
  }
  int FetchAndWrite(string reg,string rule,string fact,string dir){
   string tocName="NokiTrading.toc";
-  if(!File.Exists(Path.Combine(dir,tocName)))throw new Exception("Select the NokiTrading addon folder");
+  if(!File.Exists(Path.Combine(dir,tocName)))throw new Exception("Select the Marketeer addon folder");
   string toc=File.ReadAllText(Path.Combine(dir,tocName));if(!toc.Contains("NokiTradingData"))throw new Exception("Install a compatible Marketeer addon first");
-  var addons=Directory.GetParent(Path.GetFullPath(dir));if(addons==null || !addons.Name.Equals("AddOns",StringComparison.OrdinalIgnoreCase))throw new Exception("Select the NokiTrading folder inside Interface/AddOns");
+  var addons=Directory.GetParent(Path.GetFullPath(dir));if(addons==null || !addons.Name.Equals("AddOns",StringComparison.OrdinalIgnoreCase))throw new Exception("Select the Marketeer folder inside Interface/AddOns");
   var match=Regex.Match(toc,@"(?m)^##\s*Interface:\s*(\d+)");if(!match.Success)throw new Exception("Cannot determine interface version");
   string dataDir=Path.Combine(addons.FullName,"NokiTradingData");
   string url="https://devvy.xyz/marketeer/market-data.php?region="+reg+"&ruleset="+rule+"&faction="+fact;

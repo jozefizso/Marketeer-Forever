@@ -1,10 +1,10 @@
-# Marketeer price trend prototype
+# Marketeer price trends
 
-`trends.py` imports validated AHL1 snapshots into a separate SQLite database. It keeps at most one latest observation per market/item/hour and calculates the median of AHledger's market medians over the latest 24 hours, previous 24 hours, latest 48 hours, and latest 14 days. Prices are copper. A single one-copper low listing does not directly determine the result; thin markets or sustained manipulation can still affect medians.
+`trends.py` imports validated AHL1 snapshots into a separate SQLite database. It keeps at most one latest observation per market/item/hour. The original per-item API uses market medians; the updater's version 2 export uses the median of hourly lowest buyouts over the latest 24 hours, 48 hours, and 14 days. Prices are copper. A brief one-copper low is less influential, but thin markets or sustained undercutting can still affect the result. The feed does not provide the five lowest price levels.
 
-Outputs include sample count, time span, last observation, and a sufficiency flag. Percentage changes are withheld until the relevant periods meet the minimum coverage thresholds. These thresholds are initial heuristics and should be reviewed with live data. Empty items and missing markets are never treated as zero. Summaries do not imply confirmed sales.
+The per-item API includes sample count, time span, last observation, and a sufficiency flag. The updater export leaves insufficient periods empty. The tooltip compares the most recent available local AH scan (or AHledger reference if no scan exists) with each eligible historical low and displays the comparison source and age. These thresholds are initial heuristics and should be reviewed with live data. Empty items and missing markets are never treated as zero. Summaries do not imply confirmed sales.
 
-`collect.py` is a staged collector for all 24 region/ruleset/faction groups. It checks upstream cache headers, continues after individual market failures, can backfill existing valid snapshots, and expires its own hourly observations after two weeks. It does not delete existing server snapshots or the separate personal-scan database. Those existing stores must be addressed separately to enforce the requested total retention limit.
+`collect.py` collects all 24 region/ruleset/faction groups. It checks upstream cache headers, continues after individual market failures, can backfill existing valid snapshots, and expires its own hourly observations after two weeks. Separate cleanup handles the existing raw snapshots and personal-scan database.
 
 `retention.py` is the separately tested cleanup: it deletes timestamp-named raw AHledger snapshot files older than 14 days and deletes older rows from the existing personal/older-scan history database. It does not remove other files. On an hourly schedule, expiry can occur up to roughly an hour after the 14-day boundary. The owner approved this cleanup.
 
