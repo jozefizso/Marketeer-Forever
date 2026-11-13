@@ -1,0 +1,30 @@
+## Interface: 16001
+## Title: Marketeer
+## Notes: Market, crafting, auction tracking and help.
+## Version: 1.0.70
+## SavedVariables: NokiUnifiedCoreDB, NokiUnifiedMarketDB, NokiUnifiedCraftDB
+## OptionalDeps: NokiTradingData
+Core.lua
+Menu.lua
+Trading.lua
+PendingSales.lua
+PurchaseHistory.lua
+Tooltip.lua
+BagValue.lua
+BagRules.lua
+BagExclusions.lua
+Import.lua
+Market\VendorData.lua
+Market\RemoteData.lua
+Market\MarketActivity.lua
+Market\Buyout.lua
+Market\Demand.lua
+Market\NokiUnifiedMarket.lua
+Market\FlipPanel.lua
+Crafting\VendorData.lua
+Crafting\MarketActivity.lua
+Crafting\NokiUnifiedCraft.lua
+Crafting\FlipPanel.lua
+Crafting\CraftingCatalog.lua
+Crafting\Crafting.lua
+Market\Acquisition.lua
