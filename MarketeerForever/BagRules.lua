@@ -1,11 +1,11 @@
 -- Configurable vendor-versus-auction indicators for bag slots.
-local core=NokiUnifiedCore
+local core=MarketeerForeverCore
 local dots=setmetatable({},{__mode="k"})
 local pending,window,rows,status=false,nil,{},nil
 local defaults={{threshold=20,r=1,g=.82,b=.2},{threshold=0,r=.25,g=.85,b=.35}}
 local function rules()
-  if not NokiUnifiedCoreDB then return {} end
-  local db=NokiUnifiedCoreDB
+  if not MarketeerForeverCoreDB then return {} end
+  local db=MarketeerForeverCoreDB
   if type(db.bagRules)~="table" then
     db.bagRules={}
     for i,v in ipairs(defaults) do db.bagRules[i]={threshold=v.threshold,r=v.r,g=v.g,b=v.b} end
@@ -25,10 +25,10 @@ local function rules()
 end
 local function priceFor(id)
   local market=core.Market()
-  local book=market and NokiUnifiedCoreDB and NokiUnifiedCoreDB.prices and NokiUnifiedCoreDB.prices[market]
+  local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
   local row=book and book.items and book.items[id]
   if row and type(row.price)=="number" and row.price>0 then return row.price end
-  local reference=NokiUnifiedAPI and NokiUnifiedAPI.GetPrice(id)
+  local reference=MarketeerForeverAPI and MarketeerForeverAPI.GetPrice(id)
   return reference and reference.minBuyout
 end
 local function vendorFor(id,link)
@@ -121,7 +121,7 @@ local function chooseColor(row)
 end
 local function buildWindow()
   if window then return end
-  window=CreateFrame("Frame","NokiBagRulesWindow",UIParent,"BackdropTemplate")
+  window=CreateFrame("Frame","MarketeerForeverBagRulesWindow",UIParent,"BackdropTemplate")
   window:SetSize(530,420);window:SetPoint("CENTER");window:SetFrameStrata("DIALOG");window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
   window:SetScript("OnDragStart",function(self) self:StartMoving() end);window:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
   window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,.98);window:SetBackdropBorderColor(.35,.42,.37,1)
@@ -157,7 +157,7 @@ local function buildWindow()
       end
     end
     table.sort(nextRules,function(a,b) return a.threshold>b.threshold end)
-    NokiUnifiedCoreDB=NokiUnifiedCoreDB or {};NokiUnifiedCoreDB.bagRules=nextRules;NokiUnifiedCoreDB.bagRulesVersion=3
+    MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.bagRules=nextRules;MarketeerForeverCoreDB.bagRulesVersion=3
     status:SetText("Rules saved. Items without matching prices have no marker.");schedule()
   end)
   local excluded=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");excluded:SetSize(125,25);excluded:SetPoint("BOTTOMLEFT",20,14);excluded:SetText("Excluded items")

@@ -1,5 +1,5 @@
 -- Estimated acquisition costs in the native auction buy view.
-local core=NokiUnifiedCore
+local core=MarketeerForeverCore
 local function money(value)
   local c=math.floor(value*100+0.5)/100
   local g=math.floor(c/10000);local s=math.floor(c%10000/100);c=c%100
@@ -12,7 +12,7 @@ local vendorIndex,recipeIndex
 local function indexes()
   if not vendorIndex then
     vendorIndex={}
-    for _,v in ipairs(NokiUnifiedMarketVendorData or {}) do
+    for _,v in ipairs(MarketeerForeverMarketVendorData or {}) do
       if type(v[1])=="number" and type(v[4])=="number" and v[4]>=0 and type(v[5])=="number" and v[5]>0 then
         vendorIndex[v[1]]=vendorIndex[v[1]] or {};table.insert(vendorIndex[v[1]],v)
       end
@@ -20,7 +20,7 @@ local function indexes()
   end
   if not recipeIndex then
     recipeIndex={}
-    for _,r in pairs((NokiUnifiedCraftCraftCatalog and NokiUnifiedCraftCraftCatalog.recipes) or {}) do
+    for _,r in pairs((MarketeerForeverCraftCraftCatalog and MarketeerForeverCraftCraftCatalog.recipes) or {}) do
       if type(r.output)=="number" then recipeIndex[r.output]=recipeIndex[r.output] or {};table.insert(recipeIndex[r.output],r) end
     end
   end
@@ -45,7 +45,7 @@ local function vendorCost(id,quantity,ah)
 end
 function core.AcquisitionEstimate(id)
   indexes()
-  local market=core.Market();local book=market and NokiUnifiedCoreDB and NokiUnifiedCoreDB.prices and NokiUnifiedCoreDB.prices[market]
+  local market=core.Market();local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
   local prices=book and book.items or {};local bestVendor
   for _,v in ipairs(vendorIndex[id] or {}) do if not bestVendor or v[4]/v[5]<bestVendor[4]/bestVendor[5] then bestVendor=v end end
   local bestCraft,knownRecipes,missing

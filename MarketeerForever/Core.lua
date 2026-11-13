@@ -1,11 +1,11 @@
 -- Noki local beta: native price-table reader and auction browse scanner.
-NokiUnifiedCore = {listeners={}, phase="idle", active=false, working={}}
-local core=NokiUnifiedCore
+MarketeerForeverCore = {listeners={}, phase="idle", active=false, working={}}
+local core=MarketeerForeverCore
 -- Some item-search results aggregate many unstackable items at one unit price.
 function core.ItemSearchUnitPrice(id,buyout,quantity)
   if type(buyout)~="number" or buyout<=0 or type(quantity)~="number" or quantity<=0 then return nil end
   if quantity==1 then return buyout end
-  local saved=NokiUnifiedMarketDB and NokiUnifiedMarketDB.itemCatalog
+  local saved=MarketeerForeverMarketDB and MarketeerForeverMarketDB.itemCatalog
   local item=saved and (saved[id] or saved[tostring(id)])
   local maxStack=item and tonumber(item.maxStack)
   if not maxStack and GetItemInfo then local ok,_,_,_,_,_,_,_,stack=pcall(GetItemInfo,id);if ok then maxStack=tonumber(stack) end end
@@ -27,27 +27,27 @@ function core.Market()
   if not rules then return nil,"Cannot identify realm ruleset" end
   return "forever/"..rules.."/"..faction:lower().."/"..region
 end
-function core.AutoScanEnabled() return not NokiUnifiedCoreDB or NokiUnifiedCoreDB.autoScan~=false end
-function core.AutoScanInterval() return math.max(30,tonumber(NokiUnifiedCoreDB and NokiUnifiedCoreDB.scanIntervalMinutes) or 30) end
-function core.SetAutoScan(enabled) if NokiUnifiedCoreDB then NokiUnifiedCoreDB.autoScan=enabled and true or false end end
-function core.SetAutoScanInterval(minutes) if NokiUnifiedCoreDB then NokiUnifiedCoreDB.scanIntervalMinutes=math.max(30,math.floor(tonumber(minutes) or 30)) end end
+function core.AutoScanEnabled() return not MarketeerForeverCoreDB or MarketeerForeverCoreDB.autoScan~=false end
+function core.AutoScanInterval() return math.max(30,tonumber(MarketeerForeverCoreDB and MarketeerForeverCoreDB.scanIntervalMinutes) or 30) end
+function core.SetAutoScan(enabled) if MarketeerForeverCoreDB then MarketeerForeverCoreDB.autoScan=enabled and true or false end end
+function core.SetAutoScanInterval(minutes) if MarketeerForeverCoreDB then MarketeerForeverCoreDB.scanIntervalMinutes=math.max(30,math.floor(tonumber(minutes) or 30)) end end
 function core.AutoScanDue()
   if not core.AutoScanEnabled() then return false end
   local market=core.Market();if not market then return false end
-  local attempts=NokiUnifiedCoreDB and NokiUnifiedCoreDB.lastScanAttempt
-  local book=NokiUnifiedCoreDB and NokiUnifiedCoreDB.prices and NokiUnifiedCoreDB.prices[market]
+  local attempts=MarketeerForeverCoreDB and MarketeerForeverCoreDB.lastScanAttempt
+  local book=MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
   local last=math.max((attempts and attempts[market]) or 0,(book and book.observed) or 0)
   return last==0 or now()-last>=core.AutoScanInterval()*60
 end
 -- Restore quantities from the already-saved complete scan when its timestamp
 -- matches the price cache. This does not rewrite or fabricate a market scan.
 function core.RestoreQuantitiesFromScan()
-  local market=core.Market();local book=market and NokiUnifiedCoreDB and NokiUnifiedCoreDB.prices and NokiUnifiedCoreDB.prices[market]
+  local market=core.Market();local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
   if not book or type(book.items)~="table" or type(book.observed)~="number" then return end
   if book.quantitiesRestoredAt==book.observed then return end
   local key=(GetRealmName() or "Unknown realm").." - "..(UnitFactionGroup("player") or "Unknown faction")
   local scan
-  for _,db in ipairs({NokiUnifiedMarketDB or false,NokiUnifiedCraftDB or false}) do
+  for _,db in ipairs({MarketeerForeverMarketDB or false,MarketeerForeverCraftDB or false}) do
     local entry=db and db.markets and db.markets[key]
     local candidate=entry and entry.latestScan
     if candidate and candidate.source=="noki_beta_browse_v2" and candidate.completed==book.observed and type(candidate.rows)=="table" then scan=candidate;break end
@@ -69,10 +69,10 @@ end
 local tableCache={}
 local function getTable()
   local market,err=core.Market();if not market then return nil,err end
-  local data=_G.NokiTradingMarketData
+  local data=_G.MarketeerForeverMarketData
   local src=type(data)=="table" and data.schemaVersion==1 and data.periodHours==24 and type(data.tables)=="table" and data.tables[market] or nil
   if type(src)=="table" and (type(src.updated)~="number" or src.updated<=0 or src.updated>now()+300 or now()-src.updated>48*3600 or type(src.text)~="string") then src=nil end
-  local imported=NokiUnifiedCoreDB and NokiUnifiedCoreDB.importedTables and NokiUnifiedCoreDB.importedTables[market]
+  local imported=MarketeerForeverCoreDB and MarketeerForeverCoreDB.importedTables and MarketeerForeverCoreDB.importedTables[market]
   if type(imported)=="table" and type(imported.text)=="string" and (type(src)~="table" or (tonumber(imported.updated) or 0)>(tonumber(src.updated) or 0)) then src=imported end
   if type(src)~="table" or type(src.text)~="string" then return nil,"Market data missing, invalid or older than 48 hours; run Marketeer Data Updater and enable Marketeer Data" end
   local cache=tableCache[market]
@@ -85,12 +85,12 @@ local function getTable()
   if n==0 or (src.count and (type(src.count)~="number" or src.count~=n)) then return nil,"Invalid market data; run Marketeer Data Updater again" end
   cache={src=src,market=market,updated=src.updated,count=n,items=rows,snapshot=false};tableCache[market]=cache;return cache
 end
-NokiUnifiedAPI={}
-function NokiUnifiedAPI.GetMarket() return core.Market() end
-function NokiUnifiedAPI.GetTableInfo() local t,err=getTable();if not t then return nil,err end;return {market=t.market,updated=t.updated,count=t.count,snapshot=false} end
-function NokiUnifiedAPI.GetPrice(id) local t=getTable();local r=t and t.items[tonumber(id)];if not r then return nil end;return {market=t.market,updated=t.updated,soldPerDay=r.soldPerDay,minBuyout=r.minBuyout,median=r.median,median7d=r.median7d,median30d=r.median30d,quantity=r.quantity} end
-function NokiUnifiedAPI.GetTrend(id)
-  local d=_G.NokiTradingTrends;local market=core.Market()
+MarketeerForeverAPI={}
+function MarketeerForeverAPI.GetMarket() return core.Market() end
+function MarketeerForeverAPI.GetTableInfo() local t,err=getTable();if not t then return nil,err end;return {market=t.market,updated=t.updated,count=t.count,snapshot=false} end
+function MarketeerForeverAPI.GetPrice(id) local t=getTable();local r=t and t.items[tonumber(id)];if not r then return nil end;return {market=t.market,updated=t.updated,soldPerDay=r.soldPerDay,minBuyout=r.minBuyout,median=r.median,median7d=r.median7d,median30d=r.median30d,quantity=r.quantity} end
+function MarketeerForeverAPI.GetTrend(id)
+  local d=_G.MarketeerForeverTrends;local market=core.Market()
   if type(d)~="table" or d.schemaVersion~=2 or not market or d.market~=market or type(d.generatedAt)~="number" or d.generatedAt>now()+300 or now()-d.generatedAt>48*3600 or type(d.items)~="table" then return nil end
   local r=d.items[tonumber(id)];if type(r)~="table" or type(r[5])~="number" or r[5]>now()+300 or now()-r[5]>48*3600 then return nil end
   local function price(n) if type(n)=="number" and n>0 then return n/2 end end
@@ -103,8 +103,8 @@ local function setupSellListLayout()
   if not AuctionHouseFrame then return end
   for _,name in ipairs({"CommoditiesSellList","ItemSellList"}) do
     local list=AuctionHouseFrame[name]
-    if list and list.HookScript and not list.nokiLayoutHooked then
-      list.nokiLayoutHooked=true
+    if list and list.HookScript and not list.marketeerLayoutHooked then
+      list.marketeerLayoutHooked=true
       local pending=false
       local function schedule()
         if pending then return end
@@ -113,9 +113,9 @@ local function setupSellListLayout()
           pending=false
           if not list.IsVisible or not list:IsVisible() or not list.isInitialized then return end
           local scroll=list.ScrollBox;local width=scroll and scroll.GetWidth and scroll:GetWidth()
-          if type(width)~="number" or width<=0 or width==list.nokiLayoutWidth then return end
+          if type(width)~="number" or width<=0 or width==list.marketeerLayoutWidth then return end
           if type(list.SetTableBuilderLayout)~="function" or type(list.tableBuilderLayoutFunction)~="function" then return end
-          list.nokiLayoutWidth=width
+          list.marketeerLayoutWidth=width
           list:SetTableBuilderLayout(list.tableBuilderLayoutFunction)
           if list.DirtyScrollFrame then list:DirtyScrollFrame() end
         end
@@ -131,11 +131,11 @@ local function setupSellScanNotice()
   if not AuctionHouseFrame then return end
   for _,key in ipairs({"CommoditiesSellFrame","ItemSellFrame"}) do
     local frame=AuctionHouseFrame[key]
-    if frame and frame.PostButton and not frame.nokiScanNotice then
+    if frame and frame.PostButton and not frame.marketeerScanNotice then
       local notice=frame:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
       notice:SetPoint("TOP",frame.PostButton,"BOTTOM",0,-5);notice:SetWidth(230)
       notice:SetText("Auctions cannot be created while the scan is running.");notice:SetTextColor(1,.75,.25);notice:Hide()
-      frame.nokiScanNotice=notice
+      frame.marketeerScanNotice=notice
       if hooksecurefunc and frame.UpdatePostButtonState then
         hooksecurefunc(frame,"UpdatePostButtonState",function(self)
           if core.phase~="idle" then self.PostButton:Disable() end
@@ -149,8 +149,8 @@ local function updateSellScanNotice()
   if not AuctionHouseFrame then return end
   for _,key in ipairs({"CommoditiesSellFrame","ItemSellFrame"}) do
     local frame=AuctionHouseFrame[key]
-    if frame and frame.nokiScanNotice then
-      frame.nokiScanNotice:SetShown(core.phase~="idle")
+    if frame and frame.marketeerScanNotice then
+      frame.marketeerScanNotice:SetShown(core.phase~="idle")
       if core.phase~="idle" then frame.PostButton:Disable()
       elseif frame.UpdatePostButtonState then frame:UpdatePostButtonState() end
     end
@@ -200,7 +200,7 @@ function core.Scan()
   local ok,err=pcall(C_AuctionHouse.SendBrowseQuery,{searchString="",sorts={},filters={},itemClassFilters={}})
   if not ok then core.phase="idle";announce("failed");return false,tostring(err) end
   local market=core.Market()
-  if market and NokiUnifiedCoreDB then NokiUnifiedCoreDB.lastScanAttempt=NokiUnifiedCoreDB.lastScanAttempt or {};NokiUnifiedCoreDB.lastScanAttempt[market]=now() end
+  if market and MarketeerForeverCoreDB then MarketeerForeverCoreDB.lastScanAttempt=MarketeerForeverCoreDB.lastScanAttempt or {};MarketeerForeverCoreDB.lastScanAttempt[market]=now() end
   if core.OnScanStarted then core.OnScanStarted() end
   return true
 end
@@ -229,8 +229,8 @@ local function browseResults(event,payload)
   end
   rows=core.browseRows
   local market=core.Market()
-  if market and NokiUnifiedCoreDB then
-    local old=NokiUnifiedCoreDB.prices[market]
+  if market and MarketeerForeverCoreDB then
+    local old=MarketeerForeverCoreDB.prices[market]
     local oldCount=old and old.rowCount
     if not oldCount and old and type(old.items)=="table" then oldCount=0;for _ in pairs(old.items) do oldCount=oldCount+1 end end
     if #rows==0 or (oldCount and oldCount>=1000 and #rows<oldCount/2) then
@@ -258,7 +258,7 @@ local function browseResults(event,payload)
         end
       end
     end
-    NokiUnifiedCoreDB.prices[market]={observed=observed,rowCount=#rows,items=prices}
+    MarketeerForeverCoreDB.prices[market]={observed=observed,rowCount=#rows,items=prices}
   end
   core.phase="idle";core.lastBrowseAt=now();core.lastBrowse=rows;announce("complete",rows)
   if core.OnBrowseComplete then core.OnBrowseComplete(rows) end
@@ -266,13 +266,19 @@ end
 local events=CreateFrame("Frame")
 for _,event in ipairs({"ADDON_LOADED","PLAYER_LOGIN","AUCTION_HOUSE_SHOW","AUCTION_HOUSE_CLOSED","AUCTION_HOUSE_BROWSE_RESULTS_UPDATED","AUCTION_HOUSE_BROWSE_RESULTS_ADDED","AUCTION_HOUSE_BROWSE_FAILURE","AUCTION_HOUSE_THROTTLED_MESSAGE_RESPONSE_RECEIVED"}) do pcall(events.RegisterEvent,events,event) end
 events:SetScript("OnEvent",function(_,event,arg)
-  if event=="ADDON_LOADED" and arg=="NokiTrading" then NokiUnifiedCoreDB=NokiUnifiedCoreDB or {};NokiUnifiedCoreDB.prices=NokiUnifiedCoreDB.prices or {};if NokiUnifiedCoreDB.bagCoinEnabled==nil then NokiUnifiedCoreDB.bagCoinEnabled=true end;if NokiUnifiedCoreDB.autoScan==nil then NokiUnifiedCoreDB.autoScan=true end;core.SetAutoScanInterval(NokiUnifiedCoreDB.scanIntervalMinutes or 30)
+  if event=="ADDON_LOADED" and arg=="MarketeerForever" then
+    -- Legacy names are declared only to migrate a copied Noki Trading save once.
+    if type(MarketeerForeverCoreDB)~="table" and type(NokiUnifiedCoreDB)=="table" then MarketeerForeverCoreDB=NokiUnifiedCoreDB end
+    if type(MarketeerForeverMarketDB)~="table" and type(NokiUnifiedMarketDB)=="table" then MarketeerForeverMarketDB=NokiUnifiedMarketDB end
+    if type(MarketeerForeverCraftDB)~="table" and type(NokiUnifiedCraftDB)=="table" then MarketeerForeverCraftDB=NokiUnifiedCraftDB end
+    NokiUnifiedCoreDB=nil;NokiUnifiedMarketDB=nil;NokiUnifiedCraftDB=nil
+    MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.prices=MarketeerForeverCoreDB.prices or {};if MarketeerForeverCoreDB.bagCoinEnabled==nil then MarketeerForeverCoreDB.bagCoinEnabled=true end;if MarketeerForeverCoreDB.autoScan==nil then MarketeerForeverCoreDB.autoScan=true end;core.SetAutoScanInterval(MarketeerForeverCoreDB.scanIntervalMinutes or 30)
   elseif event=="PLAYER_LOGIN" then core.RestoreQuantitiesFromScan()
   elseif event=="AUCTION_HOUSE_SHOW" then core.active=true;updateSellScanNotice();setupSellListLayout();if core.OnOpen then core.OnOpen() end
   elseif event=="AUCTION_HOUSE_CLOSED" then
     core.active=false;if core.phase~="idle" then core.phase="idle";announce("failed") end
     core.working={};updateIndicator()
-    if NokiUnifiedTabs then NokiUnifiedTabs:HideAll() end
+    if MarketeerForeverTabs then MarketeerForeverTabs:HideAll() end
   elseif core.phase=="browse" and (event=="AUCTION_HOUSE_BROWSE_RESULTS_UPDATED" or event=="AUCTION_HOUSE_BROWSE_RESULTS_ADDED") then browseResults(event,arg)
   elseif core.phase=="browse" and event=="AUCTION_HOUSE_BROWSE_FAILURE" then core.phase="idle";announce("failed");print("Marketeer: auction browse scan failed.")
   elseif core.phase=="browse" and event=="AUCTION_HOUSE_THROTTLED_MESSAGE_RESPONSE_RECEIVED" then requestMore() end
@@ -281,17 +287,17 @@ local elapsed=0;events:SetScript("OnUpdate",function(_,delta)
   if core.phase=="browse" then elapsed=elapsed+delta;if elapsed>=1 then elapsed=0;if now()-(core.browseStarted or now())>180 then core.phase="idle";announce("failed");print("Marketeer: scan timed out; previous data retained.") else requestMore() end end end
 end)
 -- Independent auction-house tabs; native tabs hide the Noki overlay when selected.
-NokiUnifiedTabs={tabs={},ordered={}}
-local tabOrder={NokiUnifiedMarketFlips=1,NokiUnifiedCraftCrafting=2,NokiUnifiedOwned=3,NokiDemand=4,NokiPurchaseHistory=5}
-function NokiUnifiedTabs:DoesIDExist(id) return self.tabs[id]~=nil end
-function NokiUnifiedTabs:HideAll()
+MarketeerForeverTabs={tabs={},ordered={}}
+local tabOrder={MarketeerForeverMarketFlips=1,MarketeerForeverCraftCrafting=2,MarketeerForeverOwned=3,MarketeerForeverDemand=4,MarketeerForeverPurchaseHistory=5}
+function MarketeerForeverTabs:DoesIDExist(id) return self.tabs[id]~=nil end
+function MarketeerForeverTabs:HideAll()
   self.selected=nil
   for _,entry in ipairs(self.ordered) do
     entry.host:Hide()
     if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(entry.button) end
   end
 end
-function NokiUnifiedTabs:CreateTab(id,host,label)
+function MarketeerForeverTabs:CreateTab(id,host,label)
   if not self.hooked then
     self.hooked=true
     if type(AuctionHouseFrame.Tabs)=="table" then
@@ -327,7 +333,7 @@ function NokiUnifiedTabs:CreateTab(id,host,label)
   if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(button) end
   button:SetScript("OnClick",function() self:SetSelected(id) end)
 end
-function NokiUnifiedTabs:SetSelected(id)
+function MarketeerForeverTabs:SetSelected(id)
   if core.working.resaleView then core.SetWorking("resaleView",false) end
   self:HideAll()
   local tab=self.tabs[id]

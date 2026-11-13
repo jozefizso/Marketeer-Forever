@@ -6,9 +6,9 @@ local requestedItems={}
 local function now() return (GetServerTime and GetServerTime()) or time() end
 local pageSize=8
 local function history()
-  if not NokiUnifiedCoreDB then return nil end
-  NokiUnifiedCoreDB.purchaseHistory=NokiUnifiedCoreDB.purchaseHistory or {}
-  return NokiUnifiedCoreDB.purchaseHistory
+  if not MarketeerForeverCoreDB then return nil end
+  MarketeerForeverCoreDB.purchaseHistory=MarketeerForeverCoreDB.purchaseHistory or {}
+  return MarketeerForeverCoreDB.purchaseHistory
 end
 local function money(copper)
   if type(copper)~="number" then return "--" end
@@ -44,7 +44,7 @@ local function render()
       if type(name)~="string" or name=="" then name=nil end
       if not name and C_Item and C_Item.GetItemInfo then local ok,itemName=pcall(C_Item.GetItemInfo,entry.itemID);if ok then name=itemName end end
       if type(name)~="string" or name=="" then name=nil end
-      local catalog=NokiUnifiedMarketDB and NokiUnifiedMarketDB.itemCatalog
+      local catalog=MarketeerForeverMarketDB and MarketeerForeverMarketDB.itemCatalog
       local cached=catalog and (catalog[tostring(entry.itemID)] or catalog[entry.itemID])
       if not name and cached and type(cached.name)=="string" and cached.name~="" then name=cached.name end
       if not icon and C_Item and C_Item.GetItemIconByID then local ok,result=pcall(C_Item.GetItemIconByID,entry.itemID);if ok then icon=result end end
@@ -63,7 +63,7 @@ local function record(itemID,quantity,quotedTotal,kind,paidTotal)
   offset=0;render()
 end
 local function createPanel()
-  if panel or not AuctionHouseFrame or not NokiUnifiedTabs then return end
+  if panel or not AuctionHouseFrame or not MarketeerForeverTabs then return end
   panel=CreateFrame("Frame",nil,AuctionHouseFrame,"BackdropTemplate");panel:Hide()
   panel:SetPoint("TOPLEFT",AuctionHouseFrame,"TOPLEFT",12,-75);panel:SetPoint("BOTTOMRIGHT",AuctionHouseFrame,"BOTTOMRIGHT",-12,35)
   panel:SetFrameStrata("DIALOG");panel:SetFrameLevel(AuctionHouseFrame:GetFrameLevel()+50)
@@ -82,7 +82,7 @@ local function createPanel()
     row:EnableMouse(true);row:SetScript("OnEnter",function(self) if self.itemID and GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetItemByID(self.itemID);GameTooltip:Show() end end);row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
     rows[i]=row
   end
-  scrollbar=CreateFrame("Slider","NokiPurchaseHistoryScrollBar",panel,"UIPanelScrollBarTemplate");scrollbar:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-14,-110);scrollbar:SetSize(16,220);scrollbar:SetMinMaxValues(0,0);scrollbar:SetValueStep(1)
+  scrollbar=CreateFrame("Slider","MarketeerForeverPurchaseHistoryScrollBar",panel,"UIPanelScrollBarTemplate");scrollbar:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-14,-110);scrollbar:SetSize(16,220);scrollbar:SetMinMaxValues(0,0);scrollbar:SetValueStep(1)
   if scrollbar.SetObeyStepOnDrag then scrollbar:SetObeyStepOnDrag(true) end
   scrollbar:SetScript("OnValueChanged",function(_,value) if not updatingScrollbar then offset=math.floor(value+.5);render() end end)
   local function wheel(_,delta) offset=math.max(0,math.min(math.max(0,#(history() or {})-pageSize),offset-delta));render() end
@@ -95,7 +95,7 @@ local function createPanel()
   local oldWidth,oldHeight
   panel:SetScript("OnShow",function() if not oldWidth then oldWidth,oldHeight=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(oldWidth+220,oldHeight+160) end;render() end)
   panel:SetScript("OnHide",function() if oldWidth then AuctionHouseFrame:SetSize(oldWidth,oldHeight);oldWidth=nil;oldHeight=nil end end)
-  NokiUnifiedTabs:CreateTab("NokiPurchaseHistory",panel,"Purchases");render()
+  MarketeerForeverTabs:CreateTab("MarketeerForeverPurchaseHistory",panel,"Purchases");render()
 end
 local hooked=false
 local function setupHooks()

@@ -1,5 +1,5 @@
 -- Owned auction view. Each cancellation requires a deliberate click.
-local core=NokiUnifiedCore
+local core=MarketeerForeverCore
 local owned, competitions={},{}
 local state={queue={},index=1,search=nil,alerted=false}
 function core.IsCompetitionSearchActive() return state.search~=nil end
@@ -83,7 +83,7 @@ local function auctionDeposit(item)
   local amount=item.depositAmount
   if amount==nil then amount=item.depositCost end
   if type(amount)=="number" and amount>=0 then return amount end
-  local saved=NokiUnifiedCoreDB and NokiUnifiedCoreDB.auctionDeposits
+  local saved=MarketeerForeverCoreDB and MarketeerForeverCoreDB.auctionDeposits
   local entry=saved and saved[tostring(item.auctionID)]
   if entry and entry.owner==((UnitGUID and UnitGUID("player")) or "") and entry.itemKey==keyString(item.itemKey) and entry.quantity==item.quantity and entry.buyout==item.buyoutAmount then return entry.amount end
   return nil
@@ -104,7 +104,7 @@ local function vendorCost(itemID,quantity)
   if type(quantity)~="number" or quantity<=0 then return nil end
   local market=(GetRealmName and GetRealmName() or "Unknown realm").." - "..(UnitFactionGroup and UnitFactionGroup("player") or "Unknown faction")
   local observed
-  for _,offer in pairs(NokiUnifiedMarketDB and NokiUnifiedMarketDB.vendorOffers or {}) do
+  for _,offer in pairs(MarketeerForeverMarketDB and MarketeerForeverMarketDB.vendorOffers or {}) do
     if offer.itemID==itemID and offer.market==market and type(offer.price)=="number" and offer.price>=0 and type(offer.stack)=="number" and offer.stack>0 and offer.purchasable~=false and not offer.extended and (not offer.currencyID or offer.currencyID==0) and (not observed or (tonumber(offer.observed) or 0)>(tonumber(observed.observed) or 0)) then observed=offer end
   end
   if observed then
@@ -112,7 +112,7 @@ local function vendorCost(itemID,quantity)
     return {cost=packs*observed.price,packs=packs,pack=observed.stack,price=observed.price,vendor=observed.vendor,limited=type(observed.available)=="number" and observed.available>=0,observed=true}
   end
   local best
-  for _,offer in ipairs(NokiUnifiedMarketVendorData or {}) do
+  for _,offer in ipairs(MarketeerForeverMarketVendorData or {}) do
     local price,pack=offer[4],offer[5]
     if offer[1]==itemID and type(price)=="number" and price>=0 and type(pack)=="number" and pack>0 then
       local packs=math.ceil(quantity/pack);local cost=packs*price
@@ -200,7 +200,7 @@ local function render()
         end
         local source=vendor and ((vendor.observed and "Last seen at " or "Vendor reference: ")..tostring(vendor.vendor).." | 1 pack: "..vendor.pack.." for "..formatMoney(vendor.price).." | "..vendor.packs.." packs: "..formatMoney(vendor.cost)..(vendor.limited and " | LIMITED STOCK" or "").." | Whole packs; verify price") or "No vendor purchase price in reference data; profit unavailable."
         local remainder=vendor and (vendor.packs*vendor.pack-item.quantity) or 0
-        local activity=NokiUnifiedMarketActivity and NokiUnifiedMarketActivity(item.itemKey.itemID)
+        local activity=MarketeerForeverMarketActivity and MarketeerForeverMarketActivity(item.itemKey.itemID)
         local age=activity and activity.observed and math.max(0,math.floor((((GetServerTime and GetServerTime()) or time())-activity.observed)/60))
         local daily="AHledger est. sales/day (item-wide): "..(activity and tostring(activity.sales) or "--")..(age and (" | data "..age.."m old"..(age>=1440 and " (stale)" or "")) or " | data age unavailable")
         row.detail:SetText(daily.."\n"..source.."\n"..scenario("Current",current).."\n"..scenario("Match",match).."\n"..scenario("Under 1c",under).."\nProfit after 5% AH cut; whole-pack cost"..(remainder>0 and (" includes "..remainder.." extra units") or "").."; deposits excluded.")
@@ -233,7 +233,7 @@ local function refreshOwned(fromOwnedUpdate)
   if state.ownedComplete and not state.cancelPending then state.needOwned=false end
   if state.ownedComplete and state.needChecks and startChecks then state.needChecks=false;startChecks() end
   render()
-  if NokiUnifiedMarketOwnedChanged then NokiUnifiedMarketOwnedChanged() end
+  if MarketeerForeverMarketOwnedChanged then MarketeerForeverMarketOwnedChanged() end
 end
 local function requestOwned()
   if not core.active or not C_AuctionHouse or not C_AuctionHouse.QueryOwnedAuctions then return end
@@ -243,12 +243,12 @@ local function requestOwned()
   if ok then state.ownedRequested=(GetServerTime and GetServerTime()) or time() end
 end
 local function createPanel()
-  if panel or not AuctionHouseFrame or not NokiUnifiedTabs then return end
+  if panel or not AuctionHouseFrame or not MarketeerForeverTabs then return end
   panel=CreateFrame("Frame",nil,AuctionHouseFrame,"BackdropTemplate");panel:Hide();panel:SetPoint("TOPLEFT",AuctionHouseFrame,"TOPLEFT",12,-75);panel:SetPoint("BOTTOMRIGHT",AuctionHouseFrame,"BOTTOMRIGHT",-12,35);panel:SetFrameStrata("DIALOG");panel:SetFrameLevel(AuctionHouseFrame:GetFrameLevel()+50);panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});panel:SetBackdropColor(.055,.065,.07,1);panel:SetBackdropBorderColor(.24,.30,.28,1)
   local previousWidth,previousHeight
   panel:SetScript("OnShow",function() if not previousWidth then previousWidth,previousHeight=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(previousWidth+220,previousHeight+180) end end)
-  panel:SetScript("OnHide",function() if StaticPopup_Hide then StaticPopup_Hide("NOKI_CONFIRM_CANCEL_AUCTION") end;if previousWidth and previousHeight then AuctionHouseFrame:SetSize(previousWidth,previousHeight) end;previousWidth=nil;previousHeight=nil end)
-  StaticPopupDialogs["NOKI_CONFIRM_CANCEL_AUCTION"]={text="Cancel the auction for %s?",button1="Cancel auction",button2="Keep auction",timeout=0,whileDead=true,hideOnEscape=true,OnAccept=function(_,id)
+  panel:SetScript("OnHide",function() if StaticPopup_Hide then StaticPopup_Hide("MARKETEER_CONFIRM_CANCEL_AUCTION") end;if previousWidth and previousHeight then AuctionHouseFrame:SetSize(previousWidth,previousHeight) end;previousWidth=nil;previousHeight=nil end)
+  StaticPopupDialogs["MARKETEER_CONFIRM_CANCEL_AUCTION"]={text="Cancel the auction for %s?",button1="Cancel auction",button2="Keep auction",timeout=0,whileDead=true,hideOnEscape=true,OnAccept=function(_,id)
     if not core.active or state.cancelPending or not C_AuctionHouse or not C_AuctionHouse.CancelAuction then return end
     local found=false;for _,auction in ipairs(owned) do if auction.auctionID==id then found=true;break end end
     if not found then print("Marketeer: that auction is no longer available.");return end
@@ -294,16 +294,16 @@ local function createPanel()
       state.queue={};state.index=1;state.search=nil;state.needChecks=false;core.SetWorking("competition",false)
       local ok,err=pcall(AuctionHouseFrame.SelectBrowseResult,AuctionHouseFrame,{itemKey=item.itemKey,minPrice=low})
       if not ok then print("Marketeer: could not open the buy view: "..tostring(err));return end
-      NokiUnifiedTabs:HideAll()
+      MarketeerForeverTabs:HideAll()
     end)
     row.cancel=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.cancel:SetSize(54,22);row.cancel:SetPoint("TOPRIGHT",row,"TOPRIGHT",-4,-4);row.cancel:SetText("Cancel");row.cancel:SetScript("OnClick",function()
       local item=row.item
       if not item or state.cancelPending or not core.active or not C_AuctionHouse.CancelAuction then return end
-      StaticPopup_Show("NOKI_CONFIRM_CANCEL_AUCTION",itemName(item),nil,item.auctionID)
+      StaticPopup_Show("MARKETEER_CONFIRM_CANCEL_AUCTION",itemName(item),nil,item.auctionID)
     end)
     rows[i]=row
   end
-  scrollbar=CreateFrame("Slider","NokiTradingOwnedScrollBar",panel,"UIPanelScrollBarTemplate");scrollbar:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-14,-139);scrollbar:SetSize(16,210);scrollbar:SetMinMaxValues(0,0);scrollbar:SetValueStep(1)
+  scrollbar=CreateFrame("Slider","MarketeerForeverOwnedScrollBar",panel,"UIPanelScrollBarTemplate");scrollbar:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-14,-139);scrollbar:SetSize(16,210);scrollbar:SetMinMaxValues(0,0);scrollbar:SetValueStep(1)
   if scrollbar.SetObeyStepOnDrag then scrollbar:SetObeyStepOnDrag(true) end
   scrollbar:SetScript("OnValueChanged",function(_,value) if not updatingScrollbar then local nextOffset=math.max(0,math.min(math.max(0,#owned-8),math.floor(value+.5)));if nextOffset~=scrollOffset then scrollOffset=nextOffset;render() end end end)
   page=rowText(panel,16,-370,700)
@@ -311,7 +311,7 @@ local function createPanel()
   panel:EnableMouseWheel(true);panel:SetScript("OnMouseWheel",scrollBy)
   for _,row in ipairs(rows) do row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",scrollBy) end
   scrollbar:EnableMouseWheel(true);scrollbar:SetScript("OnMouseWheel",scrollBy)
-  panel:Hide();NokiUnifiedTabs:CreateTab("NokiUnifiedOwned",panel,"Your auctions");render()
+  panel:Hide();MarketeerForeverTabs:CreateTab("MarketeerForeverOwned",panel,"Your auctions");render()
 end
 local function checkDone()
   local search=state.search;if not search then return end
@@ -366,8 +366,8 @@ function core.OnOpen()
     for _,kind in ipairs({"CommoditiesSellFrame","ItemSellFrame"}) do
       local sell=AuctionHouseFrame[kind]
       local isCommodity=kind=="CommoditiesSellFrame"
-      if sell and sell.PostButton and sell.PostButton.HookScript and not sell.nokiDepositHook then
-        sell.nokiDepositHook=true
+      if sell and sell.PostButton and sell.PostButton.HookScript and not sell.marketeerDepositHook then
+        sell.marketeerDepositHook=true
         sell.PostButton:HookScript("PreClick",function()
           pendingDeposit=nil
           local ok,candidate=pcall(function()
@@ -395,11 +395,11 @@ f:SetScript("OnEvent",function(_,event,arg)
   if event=="OWNED_AUCTIONS_UPDATED" then refreshOwned(true)
   elseif event=="AUCTION_HOUSE_AUCTION_CREATED" then
     local now=(GetServerTime and GetServerTime()) or time()
-    if type(arg)=="number" and pendingDeposit and now-pendingDeposit.time<=60 and NokiUnifiedCoreDB then
-      NokiUnifiedCoreDB.auctionDeposits=NokiUnifiedCoreDB.auctionDeposits or {}
-      NokiUnifiedCoreDB.auctionDeposits[tostring(arg)]=pendingDeposit
+    if type(arg)=="number" and pendingDeposit and now-pendingDeposit.time<=60 and MarketeerForeverCoreDB then
+      MarketeerForeverCoreDB.auctionDeposits=MarketeerForeverCoreDB.auctionDeposits or {}
+      MarketeerForeverCoreDB.auctionDeposits[tostring(arg)]=pendingDeposit
     end
-    pendingDeposit=nil;state.ownedComplete=false;state.needOwned=true;state.ownedRequested=nil;if NokiUnifiedMarketOwnedChanged then NokiUnifiedMarketOwnedChanged() end;requestOwned()
+    pendingDeposit=nil;state.ownedComplete=false;state.needOwned=true;state.ownedRequested=nil;if MarketeerForeverMarketOwnedChanged then MarketeerForeverMarketOwnedChanged() end;requestOwned()
   elseif event=="AUCTION_CANCELED" then
     local id=state.cancelPending
     if id and (type(arg)~="number" or arg==id) then
@@ -408,7 +408,7 @@ f:SetScript("OnEvent",function(_,event,arg)
       if expandedAuction==id then expandedAuction=nil end
       state.cancelPending=nil;state.cancelStarted=nil;scrollOffset=math.min(scrollOffset,math.max(0,#owned-8));render()
     end
-    state.ownedComplete=false;state.needOwned=true;state.ownedRequested=nil;if NokiUnifiedMarketOwnedChanged then NokiUnifiedMarketOwnedChanged() end;requestOwned();render()
+    state.ownedComplete=false;state.needOwned=true;state.ownedRequested=nil;if MarketeerForeverMarketOwnedChanged then MarketeerForeverMarketOwnedChanged() end;requestOwned();render()
   elseif event=="GET_ITEM_INFO_RECEIVED" or event=="ITEM_KEY_ITEM_INFO_RECEIVED" then render()
   elseif event=="AUCTION_HOUSE_CLOSED" then selectedAuctions={};pendingDeposit=nil;state.queue={};state.index=1;state.search=nil;core.SetWorking("competition",false);core.SetWorking("pending",false)
   elseif state.search and ((state.search.commodity and (event=="COMMODITY_SEARCH_RESULTS_UPDATED" or event=="COMMODITY_SEARCH_RESULTS_ADDED") and arg==state.search.key.itemID) or (not state.search.commodity and (event=="ITEM_SEARCH_RESULTS_UPDATED" or event=="ITEM_SEARCH_RESULTS_ADDED") and type(arg)=="table" and keyString(arg)==state.search.keyString)) then state.search.seen=true;checkDone() end

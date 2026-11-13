@@ -1,5 +1,5 @@
 -- Estimated auction value of items carried in the combined bags.
-local core=NokiUnifiedCore
+local core=MarketeerForeverCore
 local display, valueButton, pending
 local function money(value)
   value=math.floor(value+0.5)
@@ -14,7 +14,7 @@ local function refresh()
   pending=false
   if not valueButton then return end
   local market=core.Market()
-  local book=market and NokiUnifiedCoreDB and NokiUnifiedCoreDB.prices and NokiUnifiedCoreDB.prices[market]
+  local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
   local total,missing,priced,excluded,eligible=0,0,0,0,0
   local container=C_Container
   if not container or not container.GetContainerNumSlots or not container.GetContainerItemInfo then
@@ -28,15 +28,15 @@ local function refresh()
       local item=container.GetContainerItemInfo(bag,slot)
       if item then
         local id=item.itemID or (item.hyperlink and tonumber(item.hyperlink:match("item:(%d+)")))
-        local exclusions=NokiUnifiedCoreDB and NokiUnifiedCoreDB.bagValueExclusions
+        local exclusions=MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagValueExclusions
         if id and exclusions and exclusions[tostring(id)] then
           excluded=excluded+1
         else
         eligible=eligible+1
         local row=id and book and book.items and book.items[id]
         local price=row and row.price
-        if not (type(price)=="number" and price>0) and id and NokiUnifiedAPI then
-          local reference=NokiUnifiedAPI.GetPrice(id)
+        if not (type(price)=="number" and price>0) and id and MarketeerForeverAPI then
+          local reference=MarketeerForeverAPI.GetPrice(id)
           price=reference and reference.minBuyout
         end
         if type(price)=="number" and price>0 then
@@ -57,7 +57,7 @@ end
 core.RefreshBagValue=schedule
 local function restorePosition()
   local bags=_G.ContainerFrameCombinedBags
-  local pos=NokiUnifiedCoreDB and NokiUnifiedCoreDB.bagPosition
+  local pos=MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagPosition
   if not bags or not pos or type(pos.x)~="number" or type(pos.y)~="number" then return end
   if InCombatLockdown and InCombatLockdown() then return end
   local x,y=pos.x,pos.y
@@ -82,15 +82,15 @@ end
 local function finishDrag(self)
   if not self.dragging then return end
   self.dragging=nil;self:SetScript("OnUpdate",nil)
-  if self.dragX and self.dragY and NokiUnifiedCoreDB then
-    NokiUnifiedCoreDB.bagPosition={x=self.dragX,y=self.dragY,version=2}
+  if self.dragX and self.dragY and MarketeerForeverCoreDB then
+    MarketeerForeverCoreDB.bagPosition={x=self.dragX,y=self.dragY,version=2}
   end
 end
 local function setupValueButton()
   if valueButton or not ChatFrame1 then return end
-  valueButton=CreateFrame("Button","NokiBagValueButton",UIParent,"BackdropTemplate")
+  valueButton=CreateFrame("Button","MarketeerForeverBagValueButton",UIParent,"BackdropTemplate")
   valueButton:SetSize(24,24)
-  local pos=NokiUnifiedCoreDB and NokiUnifiedCoreDB.bagValueButtonPosition
+  local pos=MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagValueButtonPosition
   if pos and type(pos.x)=="number" and type(pos.y)=="number" then valueButton:SetPoint("BOTTOMLEFT",UIParent,"BOTTOMLEFT",pos.x,pos.y)
   else valueButton:SetPoint("BOTTOMLEFT",ChatFrame1,"TOPRIGHT",6,-24) end
   valueButton:SetMovable(true);valueButton:SetClampedToScreen(true);valueButton:RegisterForDrag("LeftButton")
@@ -99,9 +99,9 @@ local function setupValueButton()
   valueButton:SetScript("OnDragStop",function(self)
     self:StopMovingOrSizing()
     local x,y=self:GetLeft(),self:GetBottom()
-    if x and y and NokiUnifiedCoreDB then
+    if x and y and MarketeerForeverCoreDB then
       local scale=self:GetEffectiveScale()/UIParent:GetEffectiveScale()
-      NokiUnifiedCoreDB.bagValueButtonPosition={x=x*scale,y=y*scale}
+      MarketeerForeverCoreDB.bagValueButtonPosition={x=x*scale,y=y*scale}
     end
   end)
   valueButton:SetScript("OnClick",function(self) if not self.wasDragged and core.OpenTradingMenu then core.OpenTradingMenu("Bag") end end)
@@ -124,7 +124,7 @@ local function setupValueButton()
   core.UpdateBagCoinVisibility()
 end
 function core.UpdateBagCoinVisibility()
-  if valueButton then valueButton:SetShown(NokiUnifiedCoreDB and NokiUnifiedCoreDB.bagCoinEnabled==true) end
+  if valueButton then valueButton:SetShown(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true) end
 end
 local function setup()
   local bags=_G.ContainerFrameCombinedBags

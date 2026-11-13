@@ -1,11 +1,11 @@
 -- Show pending auction-sale payouts from the mailbox, before money is delivered.
-local core=NokiUnifiedCore
+local core=MarketeerForeverCore
 local mailOpen=false
 local panel,amountText,detailText
 local function owner() return UnitGUID and UnitGUID("player") end
 local function now() return (GetServerTime and GetServerTime()) or time() end
 function core.CapturePendingOwned(rows)
-  if type(rows)~="table" or not NokiUnifiedCoreDB then return end
+  if type(rows)~="table" or not MarketeerForeverCoreDB then return end
   local id=owner();if not id then return end
   local sold=(Enum and Enum.AuctionStatus and Enum.AuctionStatus.Sold) or 1
   local amount,count,unknown=0,0,0
@@ -16,11 +16,11 @@ function core.CapturePendingOwned(rows)
       if type(row.buyoutAmount)=="number" and row.buyoutAmount>0 then amount=amount+row.buyoutAmount else unknown=unknown+1 end
     end
   end
-  NokiUnifiedCoreDB.pendingAuctionSnapshots=NokiUnifiedCoreDB.pendingAuctionSnapshots or {}
-  NokiUnifiedCoreDB.pendingAuctionSnapshots[id]={amount=amount,count=count,unknown=unknown,checked=now()}
+  MarketeerForeverCoreDB.pendingAuctionSnapshots=MarketeerForeverCoreDB.pendingAuctionSnapshots or {}
+  MarketeerForeverCoreDB.pendingAuctionSnapshots[id]={amount=amount,count=count,unknown=unknown,checked=now()}
 end
 local function snapshot()
-  local id=owner();local saved=NokiUnifiedCoreDB and NokiUnifiedCoreDB.pendingAuctionSnapshots
+  local id=owner();local saved=MarketeerForeverCoreDB and MarketeerForeverCoreDB.pendingAuctionSnapshots
   return id and saved and saved[id] or nil
 end
 core.GetPendingAuctionSnapshot=snapshot
@@ -31,7 +31,7 @@ local function money(amount)
 end
 local function createPanel()
   if panel or not MailFrame then return end
-  panel=CreateFrame("Frame","NokiPendingSalesMailbox",MailFrame,"BackdropTemplate")
+  panel=CreateFrame("Frame","MarketeerForeverPendingSalesMailbox",MailFrame,"BackdropTemplate")
   panel:SetSize(245,95);panel:SetPoint("TOPLEFT",MailFrame,"TOPRIGHT",8,-42);panel:SetClampedToScreen(true)
   panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});panel:SetBackdropColor(.055,.065,.07,.97);panel:SetBackdropBorderColor(.35,.42,.37,1)
   local title=panel:CreateFontString(nil,"OVERLAY","GameFontNormal");title:SetPoint("TOPLEFT",10,-9);title:SetText("AUCTION SALES ON THE WAY")

@@ -6,11 +6,11 @@ local function normalized(value)
   if not s:match("^forever%.[%w_%-]+%.[%w_%-]+%.[%w_%-]+$") then return nil end
   return s
 end
-function NokiUnifiedMarketActivityMarket()
-  if type(NokiUnifiedAPI)~="table" or type(NokiUnifiedAPI.GetMarket)~="function" or type(NokiUnifiedAPI.GetPrice)~="function" then
+function MarketeerForeverCraftActivityMarket()
+  if type(MarketeerForeverAPI)~="table" or type(MarketeerForeverAPI.GetMarket)~="function" or type(MarketeerForeverAPI.GetPrice)~="function" then
     return nil,"Update Marketeer market data for estimated sales/day"
   end
-  local ok,market=pcall(NokiUnifiedAPI.GetMarket)
+  local ok,market=pcall(MarketeerForeverAPI.GetMarket)
   market=ok and normalized(market) or nil
   if not market then return nil,"Marketeer market unavailable" end
   local _,ruleset,faction,region=market:match("^(forever)%.([%w_%-]+)%.([%w_%-]+)%.([%w_%-]+)$")
@@ -39,10 +39,10 @@ function NokiUnifiedMarketActivityMarket()
   if realmType~=ruleset then return nil,"Marketeer market does not match realm type" end
   return market
 end
-function NokiUnifiedMarketActivity(itemID, expectedMarket)
-  local market,err=NokiUnifiedMarketActivityMarket()
+function MarketeerForeverCraftActivity(itemID, expectedMarket)
+  local market,err=MarketeerForeverCraftActivityMarket()
   if not market or (expectedMarket and expectedMarket~=market) then return nil,err or "AHledger market changed" end
-  local ok,price=pcall(NokiUnifiedAPI.GetPrice,itemID)
+  local ok,price=pcall(MarketeerForeverAPI.GetPrice,itemID)
   if not ok or type(price)~="table" then return nil,"No AHledger activity for item" end
   local recordMarket=normalized(price.market)
   if not recordMarket or recordMarket~=market then return nil,"Marketeer item market mismatch" end
@@ -51,8 +51,8 @@ function NokiUnifiedMarketActivity(itemID, expectedMarket)
   -- GetPrice.updated can refer to the player's newer scan while sales/day
   -- still comes from the older price table. Use table metadata for activity.
   local tableInfo
-  if type(NokiUnifiedAPI.GetTableInfo)=="function" then
-    local infoOK,info=pcall(NokiUnifiedAPI.GetTableInfo)
+  if type(MarketeerForeverAPI.GetTableInfo)=="function" then
+    local infoOK,info=pcall(MarketeerForeverAPI.GetTableInfo)
     if infoOK and type(info)=="table" and normalized(info.market)==market then tableInfo=info end
   end
   local updated=tableInfo and tableInfo.updated
@@ -62,7 +62,7 @@ function NokiUnifiedMarketActivity(itemID, expectedMarket)
   if tableInfo and type(tableInfo.snapshot)=="boolean" then snapshot=tableInfo.snapshot end
   return {sales=sales,market=market,observed=updated,snapshot=snapshot}
 end
-function NokiUnifiedMarketActivityLabel(row)
+function MarketeerForeverCraftActivityLabel(row)
   if not row then return "AHledger unavailable" end
   local age="age ?"
   if row.observed then

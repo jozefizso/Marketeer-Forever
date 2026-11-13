@@ -1,12 +1,12 @@
 -- Choose item IDs to omit from the bag-value total. All stacks of an item are excluded.
-local core=NokiUnifiedCore
+local core=MarketeerForeverCore
 local window,rows,status=nil,{},nil
 local entries,offset,pageSize={},0,8
 local requested={}
 local function excludedItems()
-  NokiUnifiedCoreDB=NokiUnifiedCoreDB or {}
-  NokiUnifiedCoreDB.bagValueExclusions=NokiUnifiedCoreDB.bagValueExclusions or {}
-  return NokiUnifiedCoreDB.bagValueExclusions
+  MarketeerForeverCoreDB=MarketeerForeverCoreDB or {}
+  MarketeerForeverCoreDB.bagValueExclusions=MarketeerForeverCoreDB.bagValueExclusions or {}
+  return MarketeerForeverCoreDB.bagValueExclusions
 end
 local function itemInfo(id)
   local getInfo=(C_Item and C_Item.GetItemInfo) or GetItemInfo
@@ -63,7 +63,7 @@ local function render(rebuild)
 end
 local function build()
   if window then return end
-  window=CreateFrame("Frame","NokiBagExclusionsWindow",UIParent,"BackdropTemplate")
+  window=CreateFrame("Frame","MarketeerForeverBagExclusionsWindow",UIParent,"BackdropTemplate")
   window:SetSize(530,430);window:SetPoint("CENTER");window:SetFrameStrata("FULLSCREEN_DIALOG");window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
   window:SetScript("OnDragStart",function(self) self:StartMoving() end);window:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
   window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,.98);window:SetBackdropBorderColor(.35,.42,.37,1)

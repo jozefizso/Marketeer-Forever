@@ -17,14 +17,14 @@ sealed class Updater : Form {
  ComboBox region=new ComboBox(),ruleset=new ComboBox(),faction=new ComboBox();
  TextBox folder=new TextBox(); Label status=new Label(); Button update=new Button(); CheckBox auto=new CheckBox(); Timer timer=new Timer();
  bool loading=true;
- string cacheDir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"NokiTradingUpdater");
+ string cacheDir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"MarketeerForeverUpdater");
  string settings { get { return Path.Combine(cacheDir,"settings.txt"); } }
  public Updater(){
   Text="Marketeer Data Updater";ClientSize=new Size(590,320);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
   Controls.Add(new Label{Text="AHledger market data for Marketeer",Left=20,Top=15,Width=540,Height=24,Font=new Font(Font,FontStyle.Bold)});
   AddLabel("Region",20,53);AddLabel("Ruleset",175,53);AddLabel("Faction",365,53);
   Setup(region,20,75,140,new[]{"US","EU","CN"});Setup(ruleset,175,75,175,new[]{"Normal","PvP","RP","RP PvP"});Setup(faction,365,75,200,new[]{"Alliance","Horde"});
-  AddLabel("Marketeer addon folder",20,118);folder.SetBounds(20,141,445,25);folder.Text=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),@"World of Warcraft\_forever_\Interface\AddOns\NokiTrading");Controls.Add(folder);
+  AddLabel("Marketeer addon folder",20,118);folder.SetBounds(20,141,445,25);folder.Text=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),@"World of Warcraft\_forever_\Interface\AddOns\MarketeerForever");Controls.Add(folder);
   Button browse=new Button{Text="Browse",Left=475,Top=139,Width=90,Height=27};browse.Click+=(s,e)=>{using(var dialog=new FolderBrowserDialog()){dialog.Description="Select your Marketeer addon folder";if(dialog.ShowDialog()==DialogResult.OK)folder.Text=dialog.SelectedPath;}};Controls.Add(browse);
   update.Text="Update now";update.SetBounds(20,183,145,32);update.Click+=async(s,e)=>await RunUpdate();Controls.Add(update);
   auto.Text="Update every 30 minutes while open";auto.SetBounds(185,188,300,24);auto.CheckedChanged+=(s,e)=>{timer.Enabled=auto.Checked;SaveSettings();};Controls.Add(auto);
@@ -38,7 +38,7 @@ sealed class Updater : Form {
  string Ruleset(){return ruleset.SelectedItem.ToString().ToLowerInvariant().Replace(" ","");}
  string Faction(){return faction.SelectedItem.ToString().ToLowerInvariant();}
  void SaveSettings(){try{if(loading)return;if(region.SelectedItem==null||ruleset.SelectedItem==null||faction.SelectedItem==null)return;Directory.CreateDirectory(cacheDir);File.WriteAllLines(settings,new[]{region.SelectedIndex.ToString(),ruleset.SelectedIndex.ToString(),faction.SelectedIndex.ToString(),folder.Text,auto.Checked.ToString()});}catch{}}
- void LoadSettings(){try{if(!File.Exists(settings))return;string[] a=File.ReadAllLines(settings);if(a.Length<5)return;int n;if(int.TryParse(a[0],out n)&&n>=0&&n<region.Items.Count)region.SelectedIndex=n;if(int.TryParse(a[1],out n)&&n>=0&&n<ruleset.Items.Count)ruleset.SelectedIndex=n;if(int.TryParse(a[2],out n)&&n>=0&&n<faction.Items.Count)faction.SelectedIndex=n;if(a[3].Length>0)folder.Text=a[3];bool v;if(bool.TryParse(a[4],out v))auto.Checked=v;}catch{}}
+ void LoadSettings(){try{string path=settings;if(!File.Exists(path)){path=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"NokiTradingUpdater","settings.txt");if(!File.Exists(path))return;}string[] a=File.ReadAllLines(path);if(a.Length<5)return;int n;if(int.TryParse(a[0],out n)&&n>=0&&n<region.Items.Count)region.SelectedIndex=n;if(int.TryParse(a[1],out n)&&n>=0&&n<ruleset.Items.Count)ruleset.SelectedIndex=n;if(int.TryParse(a[2],out n)&&n>=0&&n<faction.Items.Count)faction.SelectedIndex=n;if(a[3].Length>0){string previous=a[3].TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);folder.Text=Path.GetFileName(previous).Equals("NokiTrading",StringComparison.OrdinalIgnoreCase)?Path.Combine(Directory.GetParent(previous).FullName,"MarketeerForever"):a[3];}bool v;if(bool.TryParse(a[4],out v))auto.Checked=v;}catch{}}
  async Task RunUpdate(){
   update.Enabled=false;timer.Stop();status.Text="Downloading market data...";
   string reg=MarketRegion(),rule=Ruleset(),fact=Faction(),dir=folder.Text.Trim();SaveSettings();
@@ -47,18 +47,18 @@ sealed class Updater : Form {
   finally{update.Enabled=true;if(auto.Checked)timer.Start();}
  }
  int FetchAndWrite(string reg,string rule,string fact,string dir){
-  string tocName="NokiTrading.toc";
+  string tocName="MarketeerForever.toc";
   if(!File.Exists(Path.Combine(dir,tocName)))throw new Exception("Select the Marketeer addon folder");
-  string toc=File.ReadAllText(Path.Combine(dir,tocName));if(!toc.Contains("NokiTradingData"))throw new Exception("Install a compatible Marketeer addon first");
+  string toc=File.ReadAllText(Path.Combine(dir,tocName));if(!toc.Contains("MarketeerForeverData"))throw new Exception("Install a compatible Marketeer addon first");
   var addons=Directory.GetParent(Path.GetFullPath(dir));if(addons==null || !addons.Name.Equals("AddOns",StringComparison.OrdinalIgnoreCase))throw new Exception("Select the Marketeer folder inside Interface/AddOns");
   var match=Regex.Match(toc,@"(?m)^##\s*Interface:\s*(\d+)");if(!match.Success)throw new Exception("Cannot determine interface version");
-  string dataDir=Path.Combine(addons.FullName,"NokiTradingData");
+  string dataDir=Path.Combine(addons.FullName,"MarketeerForeverData");
   string url="https://devvy.xyz/marketeer/market-data.php?region="+reg+"&ruleset="+rule+"&faction="+fact;
   ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;
-  string text;using(var client=new WebClient()){client.Headers.Add(HttpRequestHeader.UserAgent,"NokiTradingUpdater/1.0");text=client.DownloadString(url);}
+  string text;using(var client=new WebClient()){client.Headers.Add(HttpRequestHeader.UserAgent,"MarketeerForeverUpdater/1.0");text=client.DownloadString(url);}
   string market="forever/"+rule+"/"+fact+"/"+reg; Validate(text,market);
   Directory.CreateDirectory(cacheDir);string key=rule+"_"+fact+"_"+reg;File.WriteAllText(Path.Combine(cacheDir,key+".txt"),text,new UTF8Encoding(false));
-  var result=new StringBuilder("-- AHledger data generated by Marketeer Data Updater.\n_G.NokiTradingMarketData = {schemaVersion=1,periodHours=24,generatedAt="+DateTimeOffset.UtcNow.ToUnixTimeSeconds()+",tables={\n");int count=0;
+  var result=new StringBuilder("-- AHledger data generated by Marketeer Data Updater.\n_G.MarketeerForeverMarketData = {schemaVersion=1,periodHours=24,generatedAt="+DateTimeOffset.UtcNow.ToUnixTimeSeconds()+",tables={\n");int count=0;
   foreach(string file in Directory.GetFiles(cacheDir,"*.txt")){
    string name=Path.GetFileNameWithoutExtension(file);if(!Regex.IsMatch(name,@"^(normal|pvp|rp|rppvp)_(alliance|horde)_(us|eu|cn)$"))continue;
    string[] parts=name.Split('_');string m="forever/"+parts[0]+"/"+parts[1]+"/"+parts[2];string item=File.ReadAllText(file);string[] parsed=Validate(item,m);if(m==market)count=int.Parse(parsed[2]);
@@ -67,7 +67,7 @@ sealed class Updater : Form {
   result.Append("}}\n");Directory.CreateDirectory(dataDir);
   string target=Path.Combine(dataDir,"MarketData.lua"),tmp=target+".tmp";
   try{File.WriteAllText(tmp,result.ToString(),new UTF8Encoding(false));if(File.ReadAllText(tmp)!=result.ToString())throw new Exception("Data validation failed");if(File.Exists(target))File.Replace(tmp,target,null);else File.Move(tmp,target);}finally{if(File.Exists(tmp))File.Delete(tmp);}
-  string dataToc=Path.Combine(dataDir,"NokiTradingData.toc"),tocTmp=dataToc+".tmp";
+  string dataToc=Path.Combine(dataDir,"MarketeerForeverData.toc"),tocTmp=dataToc+".tmp";
   string trendPath=Path.Combine(dataDir,"TrendData.lua");if(!File.Exists(trendPath))File.WriteAllText(trendPath,"-- Trend data not yet available.\n",new UTF8Encoding(false));
   try{File.WriteAllText(tocTmp,"## Interface: "+match.Groups[1].Value+"\n## Title: Marketeer Data\n## Notes: AHledger data\nMarketData.lua\nTrendData.lua\n",new UTF8Encoding(false));if(File.Exists(dataToc))File.Replace(tocTmp,dataToc,null);else File.Move(tocTmp,dataToc);}finally{if(File.Exists(tocTmp))File.Delete(tocTmp);}return count;
  }
@@ -78,7 +78,7 @@ sealed class Updater : Form {
   if(text.Length>4000000)throw new Exception("Trend data is too large");
   string[] lines=text.Replace("\r","").TrimEnd('\n').Split('\n');string[] h=lines[0].Split('|');long generated;int count;
   if(h.Length!=4||h[0]!="TRD2"||h[1]!=market||!long.TryParse(h[2],out generated)||generated<=0||generated>DateTimeOffset.UtcNow.ToUnixTimeSeconds()+300||!int.TryParse(h[3],out count)||count<0||count>100000||lines.Length!=count+1)throw new Exception("Invalid trend header");
-  var result=new StringBuilder("-- AHledger low-price trend summaries.\n_G.NokiTradingTrends={schemaVersion=2,market=\"").Append(market).Append("\",generatedAt=").Append(generated).Append(",items={\n");
+  var result=new StringBuilder("-- AHledger low-price trend summaries.\n_G.MarketeerForeverTrends={schemaVersion=2,market=\"").Append(market).Append("\",generatedAt=").Append(generated).Append(",items={\n");
   var seen=new HashSet<string>();
   for(int i=1;i<lines.Length;i++){
    if(!Regex.IsMatch(lines[i],@"^[1-9]\d*:\d*:\d*:\d*:\d*:\d+$"))throw new Exception("Invalid trend row");
@@ -87,7 +87,7 @@ sealed class Updater : Form {
    for(int j=1;j<=4;j++)if(p[j].Length>0&&(!long.TryParse(p[j],out value)||value<=0||value>2000000000000L))throw new Exception("Invalid trend price");
    result.Append('[').Append(p[0]).Append("]={");for(int j=1;j<=4;j++)result.Append(p[j].Length==0?"false":p[j]).Append(',');result.Append(p[5]).Append("},\n");
   }
-  result.Append("}}\n");string target=Path.Combine(Directory.GetParent(Path.GetFullPath(dir)).FullName,"NokiTradingData","TrendData.lua"),tmp=target+".tmp";
+  result.Append("}}\n");string target=Path.Combine(Directory.GetParent(Path.GetFullPath(dir)).FullName,"MarketeerForeverData","TrendData.lua"),tmp=target+".tmp";
   try{File.WriteAllText(tmp,result.ToString(),new UTF8Encoding(false));if(File.ReadAllText(tmp)!=result.ToString())throw new Exception("Trend data validation failed");if(File.Exists(target))File.Replace(tmp,target,null);else File.Move(tmp,target);}finally{if(File.Exists(tmp))File.Delete(tmp);}return count;
  }
  static string[] Validate(string text,string market){

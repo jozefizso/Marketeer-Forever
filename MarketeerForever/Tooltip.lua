@@ -33,7 +33,7 @@ local function merchantDetails(tooltip,id)
   if GetMerchantItemInfo then local _,_,price,quantity=GetMerchantItemInfo(merchant);if type(quantity)=="number" and quantity>0 then return quantity,price end end
   return nil
 end
-NokiUnifiedCore.MerchantDetails=merchantDetails
+MarketeerForeverCore.MerchantDetails=merchantDetails
 local function stackCount(tooltip,id)
   local count,cost=merchantDetails(tooltip,id)
   if count then return count,cost,true end
@@ -92,7 +92,7 @@ local function stackCount(tooltip,id)
   end
   return nil
 end
-NokiUnifiedCore.ItemStackContext=stackCount
+MarketeerForeverCore.ItemStackContext=stackCount
 local function vendorSellValue(id,link)
   local getInfo=(C_Item and C_Item.GetItemInfo) or GetItemInfo
   if getInfo then
@@ -101,7 +101,7 @@ local function vendorSellValue(id,link)
   end
   -- Catalog values are keyed by item ID and may differ for a modified item.
   if not link then
-    local catalog=NokiUnifiedMarketDB and NokiUnifiedMarketDB.itemCatalog
+    local catalog=MarketeerForeverMarketDB and MarketeerForeverMarketDB.itemCatalog
     local item=catalog and (catalog[tostring(id)] or catalog[id])
     if item and type(item.vendorSell)=="number" then return item.vendorSell end
   end
@@ -111,9 +111,9 @@ end
 local vendorBuyIndex
 local function vendorBuyReference(id)
   if not vendorBuyIndex then
-    if type(NokiUnifiedMarketVendorData)~="table" then return nil end
+    if type(MarketeerForeverMarketVendorData)~="table" then return nil end
     vendorBuyIndex={}
-    for _,offer in ipairs(NokiUnifiedMarketVendorData) do
+    for _,offer in ipairs(MarketeerForeverMarketVendorData) do
       local item,price,pack=offer[1],offer[4],offer[5]
       if type(item)=="number" and type(price)=="number" and price>0 and type(pack)=="number" and pack>0 then
         local unit=price/pack
@@ -174,7 +174,7 @@ local function addValue(tooltip,data)
   local link;if tooltip.GetItem then local _;_,link=tooltip:GetItem() end
   if not id then id=link and tonumber(link:match("item:(%d+)")) end
   if not id then hideTrendPanel();return end
-  local market=NokiUnifiedCore.Market();local book=market and NokiUnifiedCoreDB and NokiUnifiedCoreDB.prices and NokiUnifiedCoreDB.prices[market]
+  local market=MarketeerForeverCore.Market();local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
   local row=book and book.items and book.items[id];local count,cost,isMerchant,isAuction=stackCount(tooltip,id)
   local now=(GetServerTime and GetServerTime()) or time()
   local scanAge=book and type(book.observed)=="number" and math.max(0,math.floor((now-book.observed)/60))
@@ -196,7 +196,7 @@ local function addValue(tooltip,data)
     currentPrice,currentAge,currentSource=row.price,observed,"Last AH scan"
     pair("AH / unit"..(observed and (" ("..observed.."m ago)") or ""),money(row.price))
   else
-    local reference=NokiUnifiedAPI and NokiUnifiedAPI.GetPrice(id)
+    local reference=MarketeerForeverAPI and MarketeerForeverAPI.GetPrice(id)
     if reference and type(reference.minBuyout)=="number" and reference.minBuyout>0 then
       local minutes=type(reference.updated)=="number" and math.max(0,math.floor((now-reference.updated)/60))
       currentPrice,currentAge,currentSource=reference.minBuyout,minutes,"AH reference"
@@ -204,7 +204,7 @@ local function addValue(tooltip,data)
     else pair("AH / unit","--") end
   end
   if not IsShiftKeyDown or not IsShiftKeyDown() then hideTrendPanel();tooltip:Show();return end
-  local trend=NokiUnifiedAPI and NokiUnifiedAPI.GetTrend and NokiUnifiedAPI.GetTrend(id)
+  local trend=MarketeerForeverAPI and MarketeerForeverAPI.GetTrend and MarketeerForeverAPI.GetTrend(id)
   if row and type(row.price)=="number" and row.price>0 then
     priceAge=type(row.observed)=="number" and math.max(0,math.floor((now-row.observed)/60)) or scanAge
     if count then
@@ -219,8 +219,8 @@ local function addValue(tooltip,data)
     else tooltip:AddLine("Stack size unavailable",.8,.8,.8) end
     pair("Listed (last scan)",(not row.carried and type(row.quantity)=="number") and tostring(row.quantity) or "--")
   else tooltip:AddLine("Marketeer: no matching scan price. Scan the auction house.",1,.7,.3) end
-  local activity=NokiUnifiedAPI and NokiUnifiedAPI.GetPrice(id)
-  local info=NokiUnifiedAPI and NokiUnifiedAPI.GetTableInfo()
+  local activity=MarketeerForeverAPI and MarketeerForeverAPI.GetPrice(id)
+  local info=MarketeerForeverAPI and MarketeerForeverAPI.GetTableInfo()
   if activity and type(activity.soldPerDay)=="number" then
     local minutes=info and type(info.updated)=="number" and math.max(0,math.floor((((GetServerTime and GetServerTime()) or time())-info.updated)/60))
     pair("Est. sales / day",tostring(activity.soldPerDay)..(minutes and (" ("..minutes.."m ago)") or " (age ?)") )

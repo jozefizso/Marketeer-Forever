@@ -1,5 +1,5 @@
 -- Read-only buyout analysis. Never place bids or buy items.
-local core=NokiUnifiedCore
+local core=MarketeerForeverCore
 local pending
 local function now() return (GetServerTime and GetServerTime()) or time() end
 local function finish(result,err)

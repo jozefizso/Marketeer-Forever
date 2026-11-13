@@ -1,6 +1,6 @@
 -- Market Vision auction-house tab. Vendor observations are reference data.
-local TAB_ID = "NokiUnifiedMarketFlips"
-local CRAFT_TAB_ID = "NokiUnifiedMarketCrafting"
+local TAB_ID = "MarketeerForeverMarketFlips"
+local CRAFT_TAB_ID = "MarketeerForeverMarketCrafting"
 local applyMode
 local panel, tabLib, budgetBox, minSalesBox, minStackProfitBox, searchBox, sortButton, status, pageText, detailTitle, detailBody
 local rows, results, filtered = {}, {}, {}
@@ -43,8 +43,8 @@ local function copper(value)
   return remainder .. "c"
 end
 local function market()
-  if not NokiUnifiedMarketDB or not NokiUnifiedMarketDB.markets then return nil end
-  return NokiUnifiedMarketDB.markets[(GetRealmName() or "Unknown realm") .. " - " .. (UnitFactionGroup("player") or "Unknown faction")]
+  if not MarketeerForeverMarketDB or not MarketeerForeverMarketDB.markets then return nil end
+  return MarketeerForeverMarketDB.markets[(GetRealmName() or "Unknown realm") .. " - " .. (UnitFactionGroup("player") or "Unknown faction")]
 end
 local function latestSnapshot()
   local data = market()
@@ -55,13 +55,13 @@ local function latestSnapshot()
   return scan
 end
 local function usableHistory()
-  return NokiUnifiedMarketActivityMarket()
+  return MarketeerForeverMarketActivityMarket()
 end
 -- Keep the last batch snapshot only for its historical supply deltas.
 -- Daily sales always come from AHledger's in-game API.
 local function marketActivity(id, market)
-  local activity = market and NokiUnifiedMarketActivity(id, market) or nil
-  local old = NokiUnifiedMarketRemoteData
+  local activity = market and MarketeerForeverMarketActivity(id, market) or nil
+  local old = MarketeerForeverMarketRemoteData
   if market and old and old.market == market and old.items then
     local historical = old.items[id] or old.items[tostring(id)]
     if historical then
@@ -79,7 +79,7 @@ local function number(value)
 end
 local function historyText(remote)
   if not remote then return "AHledger sales/day unavailable. Install or update AHledger data." end
-  local result="AHledger est. sales/day: "..(remote.sales~=nil and tostring(remote.sales) or "unknown").." | "..NokiUnifiedMarketActivityLabel(remote).." | Prices from AHledger (ahledger.com)"
+  local result="AHledger est. sales/day: "..(remote.sales~=nil and tostring(remote.sales) or "unknown").." | "..MarketeerForeverMarketActivityLabel(remote).." | Prices from AHledger (ahledger.com)"
   if remote.historyObserved then
     result=result.."\nPrevious batch supply changes (snapshot "..date("%Y-%m-%d %H:%M",remote.historyObserved).."): "..number(remote.d1).." / "..number(remote.d2).." / "..number(remote.d8).." / "..number(remote.d24).." (1h / 2h / 8h / 24h)"
   end
@@ -147,7 +147,7 @@ local function render()
     if item then
       if viewMode=="flips" then
         row.name:SetWidth(155);row.name:SetText(item.name)
-        local quantity=NokiUnifiedCore.OwnedItemQuantity and NokiUnifiedCore.OwnedItemQuantity(item.id)
+        local quantity=MarketeerForeverCore.OwnedItemQuantity and MarketeerForeverCore.OwnedItemQuantity(item.id)
         local display=quantity~=nil and ((BreakUpLargeNumbers and BreakUpLargeNumbers(quantity)) or tostring(quantity)) or "--"
         row.selling:SetText("|cff73e6a3"..display.." selling|r");row.selling:Show()
       else row.name:SetWidth(245);row.name:SetText(item.name .. "  |cff829494#" .. item.id .. "|r");row.selling:Hide() end
@@ -233,7 +233,7 @@ end
 local function calculateLookup()
   results = {}
   local byKey, seenID, offers = {}, {}, {}
-  for _, offer in ipairs(NokiUnifiedMarketVendorData or {}) do
+  for _, offer in ipairs(MarketeerForeverMarketVendorData or {}) do
     local id, name, vendor, cost, stack = unpack(offer)
     if id and type(cost) == "number" and type(stack) == "number" and stack > 0 then
       local old = offers[id]
@@ -241,7 +241,7 @@ local function calculateLookup()
     end
   end
   local activityMarket,activityError = usableHistory()
-  local catalog = NokiUnifiedMarketDB.itemCatalog or {}
+  local catalog = MarketeerForeverMarketDB.itemCatalog or {}
   local function add(id, row)
     if not id then return end
     local suffix = row and (row.itemSuffix or 0) or 0
@@ -275,8 +275,8 @@ local function updateResaleStatus()
   if not status or viewMode~="resale" then return end
   local now=(GetServerTime and GetServerTime()) or time()
   local function age(observed) return type(observed)=="number" and (math.max(0,math.floor((now-observed)/60)).."m ago") or "unavailable" end
-  local marketID=NokiUnifiedCore and NokiUnifiedCore.Market()
-  local book=marketID and NokiUnifiedCoreDB and NokiUnifiedCoreDB.prices and NokiUnifiedCoreDB.prices[marketID]
+  local marketID=MarketeerForeverCore and MarketeerForeverCore.Market()
+  local book=marketID and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[marketID]
   local latest=book and book.observed
   local scanText="Latest scan "..age(latest).." | List "..age(resaleScanTime)
   if type(latest)=="number" and type(resaleScanTime)=="number" and latest>resaleScanTime then scanText=scanText.." | Refresh list" end
@@ -286,10 +286,10 @@ end
 local function calculateResale()
   results={};selectedID=nil;resaleEpoch=resaleEpoch+1;resaleQueue={};resaleIndex=1;resaleChecked=0;resaleUnavailable=0;resaleUnknown=0;resaleScanTime=nil;resaleOpenRequest=nil
   resaleCache={results=results}
-  local marketID=NokiUnifiedCore and NokiUnifiedCore.Market()
-  local book=marketID and NokiUnifiedCoreDB and NokiUnifiedCoreDB.prices and NokiUnifiedCoreDB.prices[marketID]
+  local marketID=MarketeerForeverCore and MarketeerForeverCore.Market()
+  local book=marketID and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[marketID]
   if not book or not book.items then status:SetText("NO SCAN | Open the auction house and run a scan.");filterAndSort();return end
-  local catalog=NokiUnifiedMarketDB.itemCatalog or {};local activityMarket=usableHistory();local unknown=0
+  local catalog=MarketeerForeverMarketDB.itemCatalog or {};local activityMarket=usableHistory();local unknown=0
   for id,row in pairs(book.items) do
     if type(id)=="number" and type(row)=="table" and not row.carried and type(row.price)=="number" and row.price>0 then
       local saved=catalog[tostring(id)] or catalog[id];local vendor=saved and saved.vendorSell;local name=saved and saved.name
@@ -311,7 +311,7 @@ local function calculateResale()
   filterAndSort()
 end
 local function calculate()
-  if not panel or not NokiUnifiedMarketDB then return end
+  if not panel or not MarketeerForeverMarketDB then return end
   if viewMode == "lookup" then calculateLookup(); return end
   if viewMode == "resale" then calculateResale(); return end
   if viewMode == "craft" then
@@ -320,8 +320,8 @@ local function calculate()
     if not sales or sales<0 or not gain or gain<0 or (budgetBox:GetText():match("%S") and (not budget or budget<0)) then
       status:SetText("Enter non-negative filters; max spend may be blank.");filterAndSort();return
     end
-    NokiUnifiedMarketDB.craftBudgetSilver=budgetBox:GetText();NokiUnifiedMarketDB.craftMinSales=sales;NokiUnifiedMarketDB.craftMinProfit=gain
-    local found,err,stats=NokiUnifiedMarketCraftCandidates(gain,sales,NokiUnifiedMarketDB.flipMatchPrice==true,NokiUnifiedMarketDB.craftKnownOnly==true,budget and budget*100 or nil)
+    MarketeerForeverMarketDB.craftBudgetSilver=budgetBox:GetText();MarketeerForeverMarketDB.craftMinSales=sales;MarketeerForeverMarketDB.craftMinProfit=gain
+    local found,err,stats=MarketeerForeverMarketCraftCandidates(gain,sales,MarketeerForeverMarketDB.flipMatchPrice==true,MarketeerForeverMarketDB.craftKnownOnly==true,budget and budget*100 or nil)
     if err then status:SetText(err);filterAndSort();return end
     for _,item in ipairs(found) do
       item.id=item.recipe.output;item.key=tostring(item.recipe.id);item.name=item.recipe.name;item.vendor=item.recipe.profession
@@ -345,11 +345,11 @@ local function calculate()
   if (minSalesBox:GetText():match("%S") and not minSales) or (minSales and (minSales < 0 or minSales > 1000000)) then status:SetText("Enter a minimum activity between 0 and 1,000,000 per day, or leave blank.");filterAndSort();return end
   local minPackSilver=readField(minStackProfitBox)
   if (minStackProfitBox:GetText():match("%S") and not minPackSilver) or (minPackSilver and (minPackSilver < 0 or minPackSilver > 1000000)) then status:SetText("Enter a non-negative minimum pack profit, or leave blank.");filterAndSort();return end
-  NokiUnifiedMarketDB.flipMinPackProfitSilver=minPackSilver or ""
-  NokiUnifiedMarketDB.flipBudgetSilver=silver or ""
-  NokiUnifiedMarketDB.flipMinSalesPerDay=minSales or ""
+  MarketeerForeverMarketDB.flipMinPackProfitSilver=minPackSilver or ""
+  MarketeerForeverMarketDB.flipBudgetSilver=silver or ""
+  MarketeerForeverMarketDB.flipMinSalesPerDay=minSales or ""
   local budget=silver and math.floor(silver*100) or nil
-  local matchPrice=NokiUnifiedMarketDB.flipMatchPrice == true
+  local matchPrice=MarketeerForeverMarketDB.flipMatchPrice == true
   local priceByItem,variants={},{ }
   for _,row in ipairs(scan.rows) do
     if row.itemID and ((row.itemSuffix or 0)~=0 or (row.battlePetSpeciesID or 0)~=0) then variants[row.itemID]=false end
@@ -364,7 +364,7 @@ local function calculate()
   local best, unknown, zero, below = {}, {}, {}, {}
   local activityMarket,activityError=usableHistory()
   local activityInfo
-  for _,offer in ipairs(NokiUnifiedMarketVendorData or {}) do
+  for _,offer in ipairs(MarketeerForeverMarketVendorData or {}) do
     local id,name,vendor,cost,stack,standing,observed,limited=unpack(offer)
     local ah=priceByItem[id]
     if ah and cost and cost>0 and stack and stack>0 and (not budget or cost<=budget) then
@@ -394,12 +394,12 @@ local function calculate()
   end
   for _,item in pairs(best) do results[#results+1]=item end
   local age=scan.completed and math.max(0,math.floor(((GetServerTime and GetServerTime()) or time())-scan.completed)) or nil
-  local sourceAge=activityInfo and NokiUnifiedMarketActivityLabel(activityInfo) or (activityError or ("AHledger "..tostring(activityMarket).." no activity"))
+  local sourceAge=activityInfo and MarketeerForeverMarketActivityLabel(activityInfo) or (activityError or ("AHledger "..tostring(activityMarket).." no activity"))
   local function count(t) local n=0;for _ in pairs(t) do n=n+1 end;return n end
   status:SetText("SCAN " .. (age and (math.floor(age/60) .. "m ago") or "unknown") .. "  |  " .. sourceAge .. "  | " .. (matchPrice and "MATCH" or "UNDERCUT 1c") .. " | excluded: " .. count(unknown) .. " unknown, " .. count(zero) .. " zero, " .. count(below) .. " below minimum")
   filterAndSort()
 end
-function NokiUnifiedCore.VendorResaleTotals(vendorSell,tiers)
+function MarketeerForeverCore.VendorResaleTotals(vendorSell,tiers)
   if type(vendorSell)~="number" or vendorSell<=0 or type(tiers)~="table" then return nil end
   local last
   for _,tier in ipairs(tiers) do
@@ -414,10 +414,10 @@ checkResaleItem=function(item,onComplete)
   if not item or item.checking then return false,"Already checking" end
   item.checking=true;item.checkError=nil
   if selectedItem==item and viewMode=="resale" then setSelected(item) end
-  local ok,err=NokiUnifiedCore.CheckBuyout(item.auctionKey,function(result,message)
+  local ok,err=MarketeerForeverCore.CheckBuyout(item.auctionKey,function(result,message)
     item.checking=false
     if result and result.tiers and result.tiers[1] then
-      local first=result.tiers[1];local totals=NokiUnifiedCore.VendorResaleTotals(item.vendorSell,result.tiers)
+      local first=result.tiers[1];local totals=MarketeerForeverCore.VendorResaleTotals(item.vendorSell,result.tiers)
       item.ah=first.price;item.unitGain=item.vendorSell-first.price;item.live=true;item.viewed=false;item.soldOut=false;item.checkError=nil
       item.lowQuantity=totals and totals.quantity;item.buyCost=totals and totals.cost;item.totalGain=totals and totals.profit;item.buyThrough=totals and totals.through
       if item.unitGain>0 and not totals then item.live=false;item.checkError="Incomplete tier totals" end
@@ -434,28 +434,28 @@ end
 openResale=function(item)
   if viewMode~="resale" or not item then return end
   if not AuctionHouseFrame.SelectBrowseResult then print("Market Vision: auction buy view unavailable.");return end
-  setSelected(item);resaleOpenRequest={item=item};NokiUnifiedCore.SetWorking("resaleView",true);updateResaleStatus()
-  if resaleInflight and NokiUnifiedCore.CancelQueuedBuyout then NokiUnifiedCore.CancelQueuedBuyout("Deferred for View") end
+  setSelected(item);resaleOpenRequest={item=item};MarketeerForeverCore.SetWorking("resaleView",true);updateResaleStatus()
+  if resaleInflight and MarketeerForeverCore.CancelQueuedBuyout then MarketeerForeverCore.CancelQueuedBuyout("Deferred for View") end
   tryOpenResale()
 end
 tryOpenResale=function()
   local request=resaleOpenRequest;if not request then return end
   local item=request.item
-  if item.soldOut or (item.live and item.unitGain<=0) then resaleOpenRequest=nil;NokiUnifiedCore.SetWorking("resaleView",false);updateResaleStatus();print("Market Vision: this item is sold out or no longer profitable to vendor.");return end
-  if NokiUnifiedCore.phase~="idle" or NokiUnifiedCore.working.buyout or (NokiUnifiedCore.IsCompetitionSearchActive and NokiUnifiedCore.IsCompetitionSearchActive()) then return end
+  if item.soldOut or (item.live and item.unitGain<=0) then resaleOpenRequest=nil;MarketeerForeverCore.SetWorking("resaleView",false);updateResaleStatus();print("Market Vision: this item is sold out or no longer profitable to vendor.");return end
+  if MarketeerForeverCore.phase~="idle" or MarketeerForeverCore.working.buyout or (MarketeerForeverCore.IsCompetitionSearchActive and MarketeerForeverCore.IsCompetitionSearchActive()) then return end
   local api=C_AuctionHouse
-  if not api or not api.GetItemKeyInfo then resaleOpenRequest=nil;NokiUnifiedCore.SetWorking("resaleView",false);updateResaleStatus();print("Market Vision: auction item details are unavailable.");return end
+  if not api or not api.GetItemKeyInfo then resaleOpenRequest=nil;MarketeerForeverCore.SetWorking("resaleView",false);updateResaleStatus();print("Market Vision: auction item details are unavailable.");return end
   local ok,info=pcall(api.GetItemKeyInfo,item.auctionKey)
   if not ok or type(info)~="table" or type(info.isCommodity)~="boolean" then
     local now=(GetServerTime and GetServerTime()) or time();request.loadStarted=request.loadStarted or now
     if not request.requested and C_Item and C_Item.RequestLoadItemDataByID then request.requested=true;pcall(C_Item.RequestLoadItemDataByID,item.id) end
-    if now-request.loadStarted>15 then resaleOpenRequest=nil;NokiUnifiedCore.SetWorking("resaleView",false);updateResaleStatus();print("Market Vision: item details did not load; try View again.") end
+    if now-request.loadStarted>15 then resaleOpenRequest=nil;MarketeerForeverCore.SetWorking("resaleView",false);updateResaleStatus();print("Market Vision: item details did not load; try View again.") end
     return
   end
   resaleOpenRequest=nil;returningFromResaleView=true;resaleReturnItem=item
-  NokiUnifiedTabs:HideAll()
+  MarketeerForeverTabs:HideAll()
   local opened,err=pcall(AuctionHouseFrame.SelectBrowseResult,AuctionHouseFrame,{itemKey=item.auctionKey,minPrice=item.ah})
-  if not opened then returningFromResaleView=false;resaleReturnItem=nil;NokiUnifiedCore.SetWorking("resaleView",false);print("Market Vision: could not open item: "..tostring(err));if tabLib then tabLib:SetSelected(TAB_ID) end end
+  if not opened then returningFromResaleView=false;resaleReturnItem=nil;MarketeerForeverCore.SetWorking("resaleView",false);print("Market Vision: could not open item: "..tostring(err));if tabLib then tabLib:SetSelected(TAB_ID) end end
 end
 local function resaleVisible()
   if not panel or viewMode~="resale" then return false end
@@ -463,9 +463,9 @@ local function resaleVisible()
   return panel:IsShown()
 end
 local function pumpResale()
-  if not resaleVisible() then if resaleOpenRequest then resaleOpenRequest=nil;NokiUnifiedCore.SetWorking("resaleView",false) end;return end
+  if not resaleVisible() then if resaleOpenRequest then resaleOpenRequest=nil;MarketeerForeverCore.SetWorking("resaleView",false) end;return end
   if resaleOpenRequest then tryOpenResale();return end
-  if resaleInflight or NokiUnifiedCore.working.buyout or resaleIndex>#resaleQueue then return end
+  if resaleInflight or MarketeerForeverCore.working.buyout or resaleIndex>#resaleQueue then return end
   local item=resaleQueue[resaleIndex]
   if item.live or item.soldOut then resaleIndex=resaleIndex+1;resaleChecked=resaleChecked+1;updateResaleStatus();return end
   local epoch=resaleEpoch;resaleIndex=resaleIndex+1;resaleInflight=true
@@ -482,26 +482,26 @@ local function pumpResale()
 end
 local function createPanel()
   if panel or not AuctionHouseFrame then return panel end
-  panel=CreateFrame("Frame","NokiUnifiedMarketFlipPanel",AuctionHouseFrame,"BackdropTemplate")
+  panel=CreateFrame("Frame","MarketeerForeverMarketFlipPanel",AuctionHouseFrame,"BackdropTemplate")
   panel:Hide()
   panel:SetFrameStrata("DIALOG");panel:SetFrameLevel(AuctionHouseFrame:GetFrameLevel()+50)
   panel:SetPoint("TOPLEFT",AuctionHouseFrame,"TOPLEFT",12,-75);panel:SetPoint("BOTTOMRIGHT",AuctionHouseFrame,"BOTTOMRIGHT",-12,35)
   panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1})
   panel:SetBackdropColor(0.055,0.065,0.07,0.97);panel:SetBackdropBorderColor(0.22,0.29,0.28,1)
   title=makeText(panel,nil,16,-12,350,"GameFontNormalLarge");title:SetText("VENDOR FLIP FINDER")
-  local scan=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");scan:SetSize(90,23);scan:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-215,-8);scan:SetText("Scan now");scan:SetScript("OnClick",function() if NokiUnifiedMarketRequestScan then NokiUnifiedMarketRequestScan() end end)
+  local scan=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");scan:SetSize(90,23);scan:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-215,-8);scan:SetText("Scan now");scan:SetScript("OnClick",function() if MarketeerForeverMarketRequestScan then MarketeerForeverMarketRequestScan() end end)
   local auto=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");auto:SetSize(88,23);auto:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-120,-8)
   local interval=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");interval:SetSize(88,23);interval:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-25,-8)
-  local function updateControls() if NokiUnifiedCore then auto:SetText("Auto: " .. (NokiUnifiedCore.AutoScanEnabled() and "ON" or "OFF"));interval:SetText("Every " .. NokiUnifiedCore.AutoScanInterval() .. "m") end end
-  auto:SetScript("OnClick",function() if NokiUnifiedMarketToggleAuto then NokiUnifiedMarketToggleAuto() end;updateControls() end)
-  interval:SetScript("OnClick",function() if NokiUnifiedMarketCycleInterval then NokiUnifiedMarketCycleInterval() end;updateControls() end)
+  local function updateControls() if MarketeerForeverCore then auto:SetText("Auto: " .. (MarketeerForeverCore.AutoScanEnabled() and "ON" or "OFF"));interval:SetText("Every " .. MarketeerForeverCore.AutoScanInterval() .. "m") end end
+  auto:SetScript("OnClick",function() if MarketeerForeverMarketToggleAuto then MarketeerForeverMarketToggleAuto() end;updateControls() end)
+  interval:SetScript("OnClick",function() if MarketeerForeverMarketCycleInterval then MarketeerForeverMarketCycleInterval() end;updateControls() end)
   updateControls()
   subtitle=makeText(panel,nil,16,-33,680,"GameFontHighlightSmall");subtitle:SetText("One-pack vendor cost vs sell price per unit. Enter filters; select a row for details.")
   local budgetLabel=makeText(panel,nil,18,-59,85,"GameFontNormalSmall");budgetLabel:SetText("MAX (SILVER)")
-  budgetBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");budgetBox:SetSize(50,24);budgetBox:SetPoint("TOPLEFT",panel,"TOPLEFT",105,-54);budgetBox:SetAutoFocus(false);budgetBox:SetNumeric(true);budgetBox:SetFontObject("GameFontHighlight");budgetBox:SetText(tostring((NokiUnifiedMarketDB and NokiUnifiedMarketDB.flipBudgetSilver) or 15))
+  budgetBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");budgetBox:SetSize(50,24);budgetBox:SetPoint("TOPLEFT",panel,"TOPLEFT",105,-54);budgetBox:SetAutoFocus(false);budgetBox:SetNumeric(true);budgetBox:SetFontObject("GameFontHighlight");budgetBox:SetText(tostring((MarketeerForeverMarketDB and MarketeerForeverMarketDB.flipBudgetSilver) or 15))
   budgetBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);budgetBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
   local minLabel=makeText(panel,nil,170,-59,90,"GameFontNormalSmall");minLabel:SetText("MIN EST./DAY")
-  minSalesBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");minSalesBox:SetSize(48,24);minSalesBox:SetPoint("TOPLEFT",panel,"TOPLEFT",260,-54);minSalesBox:SetAutoFocus(false);minSalesBox:SetFontObject("GameFontHighlight");minSalesBox:SetText(tostring((NokiUnifiedMarketDB and NokiUnifiedMarketDB.flipMinSalesPerDay) or 1));minSalesBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);minSalesBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
+  minSalesBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");minSalesBox:SetSize(48,24);minSalesBox:SetPoint("TOPLEFT",panel,"TOPLEFT",260,-54);minSalesBox:SetAutoFocus(false);minSalesBox:SetFontObject("GameFontHighlight");minSalesBox:SetText(tostring((MarketeerForeverMarketDB and MarketeerForeverMarketDB.flipMinSalesPerDay) or 1));minSalesBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);minSalesBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
   searchBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");searchBox:SetSize(125,24);searchBox:SetPoint("TOPLEFT",panel,"TOPLEFT",330,-54);searchBox:SetAutoFocus(false);searchBox:SetMaxLetters(60);searchBox:SetScript("OnTextChanged",function() if panel and status then filterAndSort(true) end end);searchBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
   searchBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();scrollOffset=0;if viewMode=="resale" then filterAndSort() else calculate() end end)
   searchHint=makeText(panel,nil,365,-80,130,"GameFontDisableSmall");searchHint:SetText("Search name, vendor or ID")
@@ -509,10 +509,10 @@ local function createPanel()
   local pricing=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");pricing:SetSize(95,24);pricing:SetPoint("TOPLEFT",panel,"TOPLEFT",620,-54)
   local undercut=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");undercut:SetSize(110,24);undercut:SetPoint("TOPLEFT",panel,"TOPLEFT",720,-54)
   local function updatePricing()
-    pricing:SetText(NokiUnifiedMarketDB.flipMatchPrice and "Match: ON" or "Match: OFF")
-    undercut:SetText(NokiUnifiedMarketDB.flipMatchPrice and "Under 1c: OFF" or "Under 1c: ON")
+    pricing:SetText(MarketeerForeverMarketDB.flipMatchPrice and "Match: ON" or "Match: OFF")
+    undercut:SetText(MarketeerForeverMarketDB.flipMatchPrice and "Under 1c: OFF" or "Under 1c: ON")
   end
-  local function setPricing(match) NokiUnifiedMarketDB.flipMatchPrice=match;updatePricing();calculate() end
+  local function setPricing(match) MarketeerForeverMarketDB.flipMatchPrice=match;updatePricing();calculate() end
   pricing:SetScript("OnClick",function() setPricing(true) end)
   undercut:SetScript("OnClick",function() setPricing(false) end)
   local function pricingTip(self)
@@ -522,7 +522,7 @@ local function createPanel()
   pricing:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end);undercut:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
   updatePricing()
   minProfitLabel=makeText(panel,nil,18,-80,125,"GameFontNormalSmall");minProfitLabel:SetText("MIN PACK GAIN (S)")
-  minStackProfitBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");minStackProfitBox:SetSize(48,20);minStackProfitBox:SetPoint("TOPLEFT",panel,"TOPLEFT",155,-74);minStackProfitBox:SetAutoFocus(false);minStackProfitBox:SetFontObject("GameFontHighlight");minStackProfitBox:SetText(tostring((NokiUnifiedMarketDB and NokiUnifiedMarketDB.flipMinPackProfitSilver) or 0));minStackProfitBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);minStackProfitBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
+  minStackProfitBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");minStackProfitBox:SetSize(48,20);minStackProfitBox:SetPoint("TOPLEFT",panel,"TOPLEFT",155,-74);minStackProfitBox:SetAutoFocus(false);minStackProfitBox:SetFontObject("GameFontHighlight");minStackProfitBox:SetText(tostring((MarketeerForeverMarketDB and MarketeerForeverMarketDB.flipMinPackProfitSilver) or 0));minStackProfitBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);minStackProfitBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
   status=makeText(panel,nil,18,-101,690,"GameFontHighlightSmall");status:SetText("Waiting for auction data.")
   local header=CreateFrame("Frame",nil,panel,"BackdropTemplate");header:SetPoint("TOPLEFT",panel,"TOPLEFT",10,-122);header:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-10,-122);header:SetHeight(22);header:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});header:SetBackdropColor(0.13,0.18,0.17,1)
   local cols={{"ITEM / VENDOR",8,245},{"BUY / UNIT",265,95},{"SELL / UNIT",370,95},{"GAIN / UNIT",475,95},{"GAIN / PACK",580,100},{"ACTIVITY",690,90},{"LISTED",790,75},{"GAP",875,90}}
@@ -544,7 +544,7 @@ local function createPanel()
     row.resaleView=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.resaleView:SetSize(52,22);row.resaleView:SetPoint("TOPRIGHT",row,"TOPRIGHT",-5,-5);row.resaleView:SetText("View");row.resaleView:Hide();row.resaleView:SetScript("OnClick",function() if row.item then openResale(row.item) end end)
     row:SetScript("OnClick",function(self) if self.item then setSelected(self.item) end end);rows[i]=row
   end
-  scrollbar=CreateFrame("Slider","NokiUnifiedMarketResultsScrollBar",panel,"UIPanelScrollBarTemplate")
+  scrollbar=CreateFrame("Slider","MarketeerForeverMarketResultsScrollBar",panel,"UIPanelScrollBarTemplate")
   scrollbar:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-14,-161);scrollbar:SetSize(16,195)
   scrollbar:SetMinMaxValues(0,0);scrollbar:SetValueStep(1)
   if scrollbar.SetObeyStepOnDrag then scrollbar:SetObeyStepOnDrag(true) end
@@ -575,9 +575,9 @@ local function createPanel()
   flipControls={budgetLabel,budgetBox,minLabel,minSalesBox,minProfitLabel,minStackProfitBox,sortButton,pricing,undercut}
   modeButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");modeButton:SetSize(125,22);modeButton:SetPoint("TOPLEFT",panel,"TOPLEFT",220,-77)
   knownButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");knownButton:SetSize(125,22);knownButton:SetPoint("TOPLEFT",panel,"TOPLEFT",335,-77)
-  knownButton:SetScript("OnClick",function() NokiUnifiedMarketDB.craftKnownOnly=not NokiUnifiedMarketDB.craftKnownOnly;knownButton:SetText(NokiUnifiedMarketDB.craftKnownOnly and "Known only" or "All recipes");calculate() end)
-  captureButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");captureButton:SetSize(110,22);captureButton:SetPoint("TOPLEFT",panel,"TOPLEFT",590,-77);captureButton:SetText("Capture recipes");captureButton:SetScript("OnClick",function() if NokiUnifiedMarketCaptureRecipes then NokiUnifiedMarketCaptureRecipes();calculate() end end)
-  local importButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");importButton:SetSize(115,22);importButton:SetPoint("TOPLEFT",panel,"TOPLEFT",845,-77);importButton:SetText("Import data");importButton:SetScript("OnClick",function() NokiUnifiedCore.ShowImport() end)
+  knownButton:SetScript("OnClick",function() MarketeerForeverMarketDB.craftKnownOnly=not MarketeerForeverMarketDB.craftKnownOnly;knownButton:SetText(MarketeerForeverMarketDB.craftKnownOnly and "Known only" or "All recipes");calculate() end)
+  captureButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");captureButton:SetSize(110,22);captureButton:SetPoint("TOPLEFT",panel,"TOPLEFT",590,-77);captureButton:SetText("Capture recipes");captureButton:SetScript("OnClick",function() if MarketeerForeverMarketCaptureRecipes then MarketeerForeverMarketCaptureRecipes();calculate() end end)
+  local importButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");importButton:SetSize(115,22);importButton:SetPoint("TOPLEFT",panel,"TOPLEFT",845,-77);importButton:SetText("Import data");importButton:SetScript("OnClick",function() MarketeerForeverCore.ShowImport() end)
   local applyButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");applyButton:SetSize(110,22);applyButton:SetPoint("TOPLEFT",panel,"TOPLEFT",470,-77);applyButton:SetText("Apply / Search");applyButton:SetScript("OnClick",function() scrollOffset=0;calculate() end)
   applyMode=function(preserveResale)
     local lookup=viewMode=="lookup";local resale=viewMode=="resale";local simple=lookup or resale;local craft=viewMode=="craft"
@@ -591,12 +591,12 @@ local function createPanel()
     for _,control in ipairs(flipControls) do control:SetShown(not simple) end
     resaleCheckButton:SetShown(resale);resaleViewButton:SetShown(resale);detailTitle:SetWidth(resale and 600 or 850);detailBody:SetWidth(resale and 650 or 850)
     knownButton:SetShown(craft);captureButton:SetShown(craft);searchHint:SetShown(not craft)
-    knownButton:SetText(NokiUnifiedMarketDB.craftKnownOnly and "Known only" or "All recipes")
+    knownButton:SetText(MarketeerForeverMarketDB.craftKnownOnly and "Known only" or "All recipes")
     minProfitLabel:SetText(craft and "MIN CRAFT GAIN (S)" or "MIN PACK GAIN (S)")
     sortButton:SetText("Sort: "..(craft and sortMode=="gain" and "Gain per craft" or sortLabels[sortMode]))
-    budgetBox:SetText(tostring(craft and (NokiUnifiedMarketDB.craftBudgetSilver or "") or (NokiUnifiedMarketDB.flipBudgetSilver or 15)))
-    minSalesBox:SetText(tostring(craft and (NokiUnifiedMarketDB.craftMinSales or 1) or (NokiUnifiedMarketDB.flipMinSalesPerDay or 1)))
-    minStackProfitBox:SetText(tostring(craft and (NokiUnifiedMarketDB.craftMinProfit or 0) or (NokiUnifiedMarketDB.flipMinPackProfitSilver or 0)))
+    budgetBox:SetText(tostring(craft and (MarketeerForeverMarketDB.craftBudgetSilver or "") or (MarketeerForeverMarketDB.flipBudgetSilver or 15)))
+    minSalesBox:SetText(tostring(craft and (MarketeerForeverMarketDB.craftMinSales or 1) or (MarketeerForeverMarketDB.flipMinSalesPerDay or 1)))
+    minStackProfitBox:SetText(tostring(craft and (MarketeerForeverMarketDB.craftMinProfit or 0) or (MarketeerForeverMarketDB.flipMinPackProfitSilver or 0)))
     modeButton:SetShown(not craft)
     modeButton:SetText(lookup and "Vendor flips" or resale and "Item lookup" or "Vendor resale")
     title:SetText(lookup and "ITEM LOOKUP" or resale and "SELL TO VENDOR" or craft and "CRAFTING PROFIT" or "VENDOR FLIP FINDER")
@@ -619,7 +619,7 @@ local function createPanel()
   end);panel:Hide()
   return panel
 end
-function NokiUnifiedMarketExplainItem(id)
+function MarketeerForeverMarketExplainItem(id)
   local scan=latestSnapshot()
   if not scan then print("Market Vision: no completed market scan available."); return end
   local lowest, quantity
@@ -627,15 +627,15 @@ function NokiUnifiedMarketExplainItem(id)
     if row.itemID==id and (row.itemSuffix or 0)==0 and (row.battlePetSpeciesID or 0)==0 and type(row.price)=="number" and row.price>0 and (not lowest or row.price<lowest) then lowest=row.price;quantity=row.quantity end
   end
   if not lowest then print("Market Vision: item " .. id .. " has no matching price in the last completed scan.");return end
-  local sell=math.floor(lowest)-((NokiUnifiedMarketDB and NokiUnifiedMarketDB.flipMatchPrice) and 0 or 1)
+  local sell=math.floor(lowest)-((MarketeerForeverMarketDB and MarketeerForeverMarketDB.flipMatchPrice) and 0 or 1)
   local remote=marketActivity(id,usableHistory())
   print("Market Vision: item " .. id .. "; last scan low " .. copper(lowest) .. "; proposed sale " .. copper(sell) .. "; listed " .. tostring(quantity or "unknown") .. "; est/day " .. tostring(remote and remote.sales or "unknown") .. ".")
   if sell<1 then print("Market Vision: excluded because a 1c auction cannot be undercut by 1c. Use MATCH if desired.");return end
-  local budget=tonumber(NokiUnifiedMarketDB.flipBudgetSilver)
+  local budget=tonumber(MarketeerForeverMarketDB.flipBudgetSilver)
   if budget then budget=budget*100 end
-  local minimum=tonumber(NokiUnifiedMarketDB.flipMinSalesPerDay) or 0
+  local minimum=tonumber(MarketeerForeverMarketDB.flipMinSalesPerDay) or 0
   local offers=0
-  for _,offer in ipairs(NokiUnifiedMarketVendorData or {}) do
+  for _,offer in ipairs(MarketeerForeverMarketVendorData or {}) do
     if offer[1]==id then
       offers=offers+1
       local cost, stack=offer[4],offer[5]
@@ -652,8 +652,8 @@ function NokiUnifiedMarketExplainItem(id)
   print("Market Vision: also check the minimum pack gain and any active search text. Estimates exclude deposits.")
 end
 local function registerTab()
-  if tabLib or not AuctionHouseFrame or not NokiUnifiedTabs then return end
-  local lib=NokiUnifiedTabs
+  if tabLib or not AuctionHouseFrame or not MarketeerForeverTabs then return end
+  local lib=MarketeerForeverTabs
   local frame=createPanel()
   local function makeHost(mode)
     local host=CreateFrame("Frame",nil,AuctionHouseFrame)
@@ -692,7 +692,7 @@ events:RegisterEvent("AUCTION_HOUSE_SHOW")
 events:RegisterEvent("AUCTION_HOUSE_CLOSED")
 events:RegisterEvent("ITEM_KEY_ITEM_INFO_RECEIVED")
 events:SetScript("OnEvent",function(_,event,id)
-  if event=="AUCTION_HOUSE_CLOSED" then returningFromResaleView=false;resaleReturnItem=nil;skipNextMarketRefresh=false;resaleOpenRequest=nil;resaleCache=nil;resaleEpoch=resaleEpoch+1;NokiUnifiedCore.SetWorking("resaleView",false)
+  if event=="AUCTION_HOUSE_CLOSED" then returningFromResaleView=false;resaleReturnItem=nil;skipNextMarketRefresh=false;resaleOpenRequest=nil;resaleCache=nil;resaleEpoch=resaleEpoch+1;MarketeerForeverCore.SetWorking("resaleView",false)
   elseif event=="ITEM_KEY_ITEM_INFO_RECEIVED" then if resaleOpenRequest and resaleOpenRequest.item.id==id and resaleVisible() then tryOpenResale() end
   elseif C_Timer and C_Timer.After then C_Timer.After(0.5,registerTab) else registerTab() end
 end)
@@ -701,26 +701,26 @@ local resaleElapsed,statusElapsed=0,0;events:SetScript("OnUpdate",function(_,del
   if statusElapsed>=30 then statusElapsed=0;if resaleVisible() then updateResaleStatus() end end
   if resaleElapsed<.75 then return end;resaleElapsed=0;pumpResale()
 end)
-function NokiUnifiedMarketRefreshFlips()
+function MarketeerForeverMarketRefreshFlips()
   if panel and panel:IsShown() then if viewMode=="resale" then updateResaleStatus() else calculate() end end
 end
-function NokiUnifiedMarketOwnedChanged() if panel and panel:IsShown() and viewMode=="flips" then render() end end
-NokiUnifiedCore.Subscribe(function(event)
+function MarketeerForeverMarketOwnedChanged() if panel and panel:IsShown() and viewMode=="flips" then render() end end
+MarketeerForeverCore.Subscribe(function(event)
   if event~="complete" then return end
   resaleCache=nil
   if resaleVisible() then calculateResale() end
 end)
-function NokiUnifiedMarketShowCrafting()
+function MarketeerForeverMarketShowCrafting()
   if not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then print("Market Vision: open the auction house first.");return end
   registerTab()
   if tabLib then tabLib:SetSelected(CRAFT_TAB_ID) else print("Market Vision: auction tab not ready.") end
 end
-function NokiUnifiedMarketShowFlips()
+function MarketeerForeverMarketShowFlips()
   if not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then print("Market Vision: open the auction house first.");return end
   registerTab()
   if tabLib then tabLib:SetSelected(TAB_ID) else print("Market Vision: auction tab not ready. Reopen the auction house.") end
 end
-SLASH_NOKIUNIFIEDMARKETFLIPS1="/nokiunimflips"
-SlashCmdList.NOKIUNIFIEDMARKETFLIPS=NokiUnifiedMarketShowFlips
-SLASH_NOKIUNIFIEDMARKETCRAFTTAB1="/nokiunimcrafttab"
-SlashCmdList.NOKIUNIFIEDMARKETCRAFTTAB=NokiUnifiedMarketShowCrafting
+SLASH_MARKETEERFOREVERMARKETFLIPS1="/nokiunimflips"
+SlashCmdList.MARKETEERFOREVERMARKETFLIPS=MarketeerForeverMarketShowFlips
+SLASH_MARKETEERFOREVERMARKETCRAFTTAB1="/nokiunimcrafttab"
+SlashCmdList.MARKETEERFOREVERMARKETCRAFTTAB=MarketeerForeverMarketShowCrafting

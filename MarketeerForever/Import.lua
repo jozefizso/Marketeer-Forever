@@ -1,5 +1,5 @@
 -- Validated market-data import. Pasted text is data, never executable Lua.
-local core=NokiUnifiedCore
+local core=MarketeerForeverCore
 function core.ImportTable(text)
   if type(text)~="string" or #text==0 then return nil,"Paste an import string first." end
   if #text>2000000 then return nil,"Import is too large." end
@@ -30,24 +30,24 @@ function core.ImportTable(text)
     end
   end
   if count~=declared then return nil,"Incomplete table: expected "..declared.." rows, received "..count.."." end
-  local current=NokiUnifiedAPI.GetTableInfo()
+  local current=MarketeerForeverAPI.GetTableInfo()
   if current and type(current.updated)=="number" and current.updated>updated then return nil,"Current data is newer; the older import was not applied." end
-  NokiUnifiedCoreDB=NokiUnifiedCoreDB or {};NokiUnifiedCoreDB.importedTables=NokiUnifiedCoreDB.importedTables or {}
-  NokiUnifiedCoreDB.importedTables[market]={updated=updated,count=count,text=body}
-  if NokiUnifiedMarketRefreshFlips then NokiUnifiedMarketRefreshFlips() end
-  if NokiUnifiedCraftRefreshFlips then NokiUnifiedCraftRefreshFlips() end
+  MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.importedTables=MarketeerForeverCoreDB.importedTables or {}
+  MarketeerForeverCoreDB.importedTables[market]={updated=updated,count=count,text=body}
+  if MarketeerForeverMarketRefreshFlips then MarketeerForeverMarketRefreshFlips() end
+  if MarketeerForeverCraftRefreshFlips then MarketeerForeverCraftRefreshFlips() end
   if core.RefreshBagRules then core.RefreshBagRules() end
   return {market=market,count=count,updated=updated}
 end
 local window,box,resultText
 local function createImport()
   if window then return end
-  window=CreateFrame("Frame","NokiUnifiedImportFrame",UIParent,"BackdropTemplate");window:SetSize(600,400);window:SetPoint("CENTER");window:SetFrameStrata("FULLSCREEN_DIALOG");window:SetClampedToScreen(true);window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,1);window:SetBackdropBorderColor(.3,.38,.34,1)
+  window=CreateFrame("Frame","MarketeerForeverImportFrame",UIParent,"BackdropTemplate");window:SetSize(600,400);window:SetPoint("CENTER");window:SetFrameStrata("FULLSCREEN_DIALOG");window:SetClampedToScreen(true);window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,1);window:SetBackdropBorderColor(.3,.38,.34,1)
   local title=window:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",window,"TOPLEFT",16,-14);title:SetText("IMPORT MARKET DATA")
   local instructions=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");instructions:SetPoint("TOPLEFT",window,"TOPLEFT",16,-40);instructions:SetWidth(560);instructions:SetJustifyH("LEFT");instructions:SetText("At devvy.xyz/marketeer/, choose your market, copy the import string, and paste it below.")
   local background=CreateFrame("Frame",nil,window,"BackdropTemplate");background:SetPoint("TOPLEFT",window,"TOPLEFT",13,-68);background:SetPoint("BOTTOMRIGHT",window,"BOTTOMRIGHT",-17,57);background:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});background:SetBackdropColor(.02,.025,.025,1);background:SetBackdropBorderColor(.3,.35,.32,1)
-  local scroll=CreateFrame("ScrollFrame","NokiUnifiedImportScroll",window,"UIPanelScrollFrameTemplate");scroll:SetPoint("TOPLEFT",window,"TOPLEFT",18,-72);scroll:SetPoint("BOTTOMRIGHT",window,"BOTTOMRIGHT",-34,62)
-  box=CreateFrame("EditBox","NokiUnifiedImportBox",scroll);box:SetMultiLine(true);box:SetFontObject("ChatFontNormal");box:SetAutoFocus(false);box:SetWidth(530);box:SetMaxLetters(0);box:SetScript("OnEscapePressed",function(self) self:ClearFocus() end);scroll:SetScrollChild(box)
+  local scroll=CreateFrame("ScrollFrame","MarketeerForeverImportScroll",window,"UIPanelScrollFrameTemplate");scroll:SetPoint("TOPLEFT",window,"TOPLEFT",18,-72);scroll:SetPoint("BOTTOMRIGHT",window,"BOTTOMRIGHT",-34,62)
+  box=CreateFrame("EditBox","MarketeerForeverImportBox",scroll);box:SetMultiLine(true);box:SetFontObject("ChatFontNormal");box:SetAutoFocus(false);box:SetWidth(530);box:SetMaxLetters(0);box:SetScript("OnEscapePressed",function(self) self:ClearFocus() end);scroll:SetScrollChild(box)
   resultText=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");resultText:SetPoint("BOTTOMLEFT",window,"BOTTOMLEFT",16,38);resultText:SetWidth(550);resultText:SetJustifyH("LEFT")
   local import=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");import:SetSize(110,24);import:SetPoint("BOTTOMRIGHT",window,"BOTTOMRIGHT",-135,10);import:SetText("Import");import:SetScript("OnClick",function()
     local result,err=core.ImportTable(box:GetText())

@@ -1,5 +1,5 @@
 -- A research table: listed supply is a snapshot; daily sales are estimates.
-local core=NokiUnifiedCore
+local core=MarketeerForeverCore
 local panel,search,status,footer,rows,columns=nil,nil,nil,nil,{},{}
 local data,filtered={},{}
 local sortKey,ascending,offset="pressure",false,0
@@ -21,7 +21,7 @@ local function number(n,decimals)
 end
 function core.DemandRecipes(itemID)
   local found={}
-  for _,recipe in pairs((NokiUnifiedCraftCraftCatalog and NokiUnifiedCraftCraftCatalog.recipes) or {}) do
+  for _,recipe in pairs((MarketeerForeverCraftCraftCatalog and MarketeerForeverCraftCraftCatalog.recipes) or {}) do
     for _,material in ipairs(recipe.materials or {}) do
       if material.id==itemID then
         found[#found+1]={name=recipe.name or ("Recipe #"..tostring(recipe.id)),profession=recipe.profession or "?",skill=tonumber(recipe.required),trainerSkill=tonumber(recipe.trainerSkill),quantity=material.quantity}
@@ -76,17 +76,17 @@ end
 local function refresh()
   if not panel then return end
   data={}
-  local market=core.Market();local activityMarket,err=NokiUnifiedMarketActivityMarket()
-  local book=market and NokiUnifiedCoreDB and NokiUnifiedCoreDB.prices and NokiUnifiedCoreDB.prices[market]
+  local market=core.Market();local activityMarket,err=MarketeerForeverMarketActivityMarket()
+  local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
   local normalizedMarket=type(market)=="string" and market:lower():gsub("/", ".") or nil
-  local info=activityMarket and activityMarket==normalizedMarket and NokiUnifiedAPI and NokiUnifiedAPI.GetTableInfo and NokiUnifiedAPI.GetTableInfo()
+  local info=activityMarket and activityMarket==normalizedMarket and MarketeerForeverAPI and MarketeerForeverAPI.GetTableInfo and MarketeerForeverAPI.GetTableInfo()
   local now=(GetServerTime and GetServerTime()) or time()
-  local catalog=NokiUnifiedMarketDB and NokiUnifiedMarketDB.itemCatalog or {}
+  local catalog=MarketeerForeverMarketDB and MarketeerForeverMarketDB.itemCatalog or {}
   if book and book.items then
     for id,price in pairs(book.items) do
       if type(id)=="number" and type(price)=="table" and not price.carried and type(price.price)=="number" then
         local saved=catalog[tostring(id)] or catalog[id];local name=(saved and saved.name) or (GetItemInfo and GetItemInfo(id)) or ("Item #"..id)
-        local remote=info and NokiUnifiedAPI.GetPrice(id);local sales=remote and remote.soldPerDay
+        local remote=info and MarketeerForeverAPI.GetPrice(id);local sales=remote and remote.soldPerDay
         if type(sales)~="number" or sales<0 or sales~=sales or sales==math.huge then sales=nil end
         local listed=type(price.quantity)=="number" and price.quantity>=0 and price.quantity or nil
         local coverage=sales and sales>0 and listed and listed/sales or nil
@@ -103,7 +103,7 @@ local function refresh()
   filter(true)
 end
 local function build()
-  if panel or not AuctionHouseFrame or not NokiUnifiedTabs then return end
+  if panel or not AuctionHouseFrame or not MarketeerForeverTabs then return end
   panel=CreateFrame("Frame",nil,AuctionHouseFrame,"BackdropTemplate");panel:Hide();panel:SetPoint("TOPLEFT",AuctionHouseFrame,"TOPLEFT",12,-75);panel:SetPoint("BOTTOMRIGHT",AuctionHouseFrame,"BOTTOMRIGHT",-12,35);panel:SetFrameStrata("DIALOG");panel:SetFrameLevel(AuctionHouseFrame:GetFrameLevel()+50);panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});panel:SetBackdropColor(.055,.065,.07,1);panel:SetBackdropBorderColor(.24,.30,.28,1)
   local title=panel:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",panel,"TOPLEFT",16,-14);title:SetText("DEMAND RESEARCH")
   search=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");search:SetSize(180,24);search:SetPoint("TOPLEFT",panel,"TOPLEFT",16,-43);search:SetAutoFocus(false);search:SetMaxLetters(60);search:SetScript("OnTextChanged",function() filter() end);search:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
@@ -136,7 +136,7 @@ local function build()
       lastClickedID=item.id;render()
       if core.phase~="idle" or core.working.buyout or core.working.competition or core.working.pending then print("Marketeer: wait for the active scan or price check to finish.");return end
       if not AuctionHouseFrame.SelectBrowseResult then print("Marketeer: the auction buy view is unavailable.");return end
-      NokiUnifiedTabs:HideAll()
+      MarketeerForeverTabs:HideAll()
       local ok,err=pcall(AuctionHouseFrame.SelectBrowseResult,AuctionHouseFrame,{itemKey=item.key,minPrice=item.price})
       if not ok then print("Marketeer: could not open item: "..tostring(err)) end
     end)
@@ -204,7 +204,7 @@ local function build()
   local width,height
   panel:SetScript("OnShow",function() if not width then width,height=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(width+220,height+365) end;refresh() end)
   panel:SetScript("OnHide",function() if width then AuctionHouseFrame:SetSize(width,height);width=nil;height=nil end end)
-  NokiUnifiedTabs:CreateTab("NokiDemand",panel,"Demand")
+  MarketeerForeverTabs:CreateTab("MarketeerForeverDemand",panel,"Demand")
 end
 local events=CreateFrame("Frame");for _,event in ipairs({"AUCTION_HOUSE_SHOW","GET_ITEM_INFO_RECEIVED"}) do pcall(events.RegisterEvent,events,event) end
 local namesPending=false

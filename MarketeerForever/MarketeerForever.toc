@@ -2,8 +2,8 @@
 ## Title: Marketeer
 ## Notes: Market, crafting, auction tracking and help.
 ## Version: 1.0.70
-## SavedVariables: NokiUnifiedCoreDB, NokiUnifiedMarketDB, NokiUnifiedCraftDB
-## OptionalDeps: NokiTradingData
+## SavedVariables: MarketeerForeverCoreDB, MarketeerForeverMarketDB, MarketeerForeverCraftDB, NokiUnifiedCoreDB, NokiUnifiedMarketDB, NokiUnifiedCraftDB
+## OptionalDeps: MarketeerForeverData
 Core.lua
 Menu.lua
 Trading.lua
@@ -19,11 +19,11 @@ Market\RemoteData.lua
 Market\MarketActivity.lua
 Market\Buyout.lua
 Market\Demand.lua
-Market\NokiUnifiedMarket.lua
+Market\MarketeerForeverMarket.lua
 Market\FlipPanel.lua
 Crafting\VendorData.lua
 Crafting\MarketActivity.lua
-Crafting\NokiUnifiedCraft.lua
+Crafting\MarketeerForeverCraft.lua
 Crafting\FlipPanel.lua
 Crafting\CraftingCatalog.lua
 Crafting\Crafting.lua

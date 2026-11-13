@@ -6,7 +6,7 @@ local SAMPLE_INTERVAL = 300
 local MAX_SAMPLES = 500
 local db, market
 
-local function say(message) print("|cff33ccffMarket Vision:|r " .. message) end
+local function say(message) print("|cff33ccffMarket Crafting:|r " .. message) end
 local function now() return (GetServerTime and GetServerTime()) or time() end
 local function marketKey()
   local realm = (GetRealmName and GetRealmName()) or "Unknown realm"
@@ -14,8 +14,8 @@ local function marketKey()
   return realm .. " - " .. faction
 end
 local function initialize()
-  NokiUnifiedMarketDB = NokiUnifiedMarketDB or {}
-  db = NokiUnifiedMarketDB
+  MarketeerForeverCraftDB = MarketeerForeverCraftDB or {}
+  db = MarketeerForeverCraftDB
   db.schema = 1
   if db.autoScan == nil then db.autoScan = false end
   if not db.rotationSetup then db.scanIntervalMinutes = 5; db.rotationSetup = true end
@@ -90,8 +90,8 @@ local function record(id, sample)
   return true
 end
 local function auctionatorSample(id)
-  local key=NokiUnifiedCore and NokiUnifiedCore.Market()
-  local data=key and NokiUnifiedCoreDB and NokiUnifiedCoreDB.prices and NokiUnifiedCoreDB.prices[key]
+  local key=MarketeerForeverCore and MarketeerForeverCore.Market()
+  local data=key and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[key]
   local row=data and data.items and data.items[id]
   if not row or not row.price then return false end
   return record(id,{time=now(),source="noki_beta_scan",price=row.price,observed=data.observed})
@@ -142,7 +142,7 @@ local function collectItem(key)
     if not success or type(row) ~= "table" or type(row.quantity) ~= "number" then return end
     quantity = quantity + row.quantity
     if type(row.buyoutAmount) == "number" and row.buyoutAmount > 0 and row.quantity > 0 then
-      local price = NokiUnifiedCore.ItemSearchUnitPrice(key.itemID,row.buyoutAmount,row.quantity)
+      local price = MarketeerForeverCore.ItemSearchUnitPrice(key.itemID,row.buyoutAmount,row.quantity)
       if price then
         detailRows[#detailRows + 1] = {unitPrice = price, buyoutAmount = row.buyoutAmount, quantity = row.quantity, auctionID = row.auctionID, itemLink = row.itemLink, timeLeft = row.timeLeft}
         if not lowest or price < lowest then lowest = price end
@@ -183,8 +183,8 @@ local function copyBrowseFields(row)
 end
 local function hookScans()
   if scanHooked then return true end
-  if not NokiUnifiedCore then return false end
-  NokiUnifiedCore.Subscribe(function(event,rows)
+  if not MarketeerForeverCore then return false end
+  MarketeerForeverCore.Subscribe(function(event,rows)
     if not market then return end
     if event=="start" then scanBusy=true;market.lastScanStarted=now();nextAttempt=now()+(db.scanIntervalMinutes or 5)*60
     elseif event=="failed" then scanBusy=false;market.lastScanFailure=now()
@@ -198,7 +198,7 @@ local function hookScans()
         end
       end
       market.scans=market.scans or {};market.latestScan=scan
-      if NokiUnifiedMarketRefreshFlips then NokiUnifiedMarketRefreshFlips() end
+      if MarketeerForeverCraftRefreshFlips then MarketeerForeverCraftRefreshFlips() end
       say("Market scan: "..#scan.rows.." browse rows.")
     end
   end)
@@ -208,7 +208,7 @@ local function startScan(manual)
   if not houseOpen or scanBusy then return end
   if not hookScans() then if manual then say("Scanner is not ready.") end;return end
   nextAttempt=now()+(db.scanIntervalMinutes or 5)*60
-  local ok,err=NokiUnifiedCore.Scan()
+  local ok,err=MarketeerForeverCore.Scan()
   if not ok then nextAttempt=now()+60;if manual then say(err or "Scan unavailable") end end
 end
 
@@ -217,7 +217,7 @@ local function showStatus()
   for _ in pairs(market.watch) do watched = watched + 1 end
   for _, item in pairs(market.items) do items = items + 1; samples = samples + #(item.samples or {}) end
   say(marketKey() .. ": " .. watched .. " watched, " .. items .. " items, " .. samples .. " observations. AH " .. (houseOpen and "open" or "closed") .. ".")
-  say("Automatic market scans " .. (NokiUnifiedCore.AutoScanEnabled() and "on" or "off") .. " (" .. NokiUnifiedCore.AutoScanInterval() .. " minutes); completed scans saved: " .. #(market.scans or {}) .. ".")
+  say("Automatic market scans " .. (MarketeerForeverCore.AutoScanEnabled() and "on" or "off") .. " (" .. MarketeerForeverCore.AutoScanInterval() .. " minutes); completed scans saved: " .. #(market.scans or {}) .. ".")
   say("Native scanner. Listing quantity is supply, not confirmed sales.")
 end
 local function report(id)
@@ -227,14 +227,14 @@ local function report(id)
   local price = s.price and (math.floor(s.price + 0.5) .. "c/unit") or "no buyout"
   say("Item " .. id .. ": " .. price .. ", " .. s.source .. (s.quantity and (", " .. s.quantity .. " listed" .. (s.complete and " (complete results)" or " (possibly partial)")) or "") .. (s.ageDays and (", cache age " .. s.ageDays .. " days") or "") .. ", observed " .. date("%Y-%m-%d %H:%M", s.time) .. ".")
 end
-function NokiUnifiedMarketRequestScan() startScan(true) end
-function NokiUnifiedMarketToggleAuto()
-  local enabled=not NokiUnifiedCore.AutoScanEnabled();NokiUnifiedCore.SetAutoScan(enabled)
+function MarketeerForeverCraftRequestScan() startScan(true) end
+function MarketeerForeverCraftToggleAuto()
+  local enabled=not MarketeerForeverCore.AutoScanEnabled();MarketeerForeverCore.SetAutoScan(enabled)
   say("Automatic scans "..(enabled and "on" or "off")..".")
 end
-function NokiUnifiedMarketCycleInterval()
-  local current=NokiUnifiedCore.AutoScanInterval();local chosen=current<60 and 60 or current<120 and 120 or 30
-  NokiUnifiedCore.SetAutoScanInterval(chosen);say("Scan interval: "..chosen.." minutes.")
+function MarketeerForeverCraftCycleInterval()
+  local current=MarketeerForeverCore.AutoScanInterval();local chosen=current<60 and 60 or current<120 and 120 or 30
+  MarketeerForeverCore.SetAutoScanInterval(chosen);say("Scan interval: "..chosen.." minutes.")
 end
 
 frame:RegisterEvent("ADDON_LOADED")
@@ -274,18 +274,18 @@ frame:SetScript("OnUpdate", function(_, delta)
   elapsed = elapsed + delta
   if elapsed >= SAMPLE_INTERVAL then elapsed = 0; sampleWatch() end
 end)
-SLASH_NOKIUNIFIEDMARKET1 = "/nokiunim"
-SlashCmdList.NOKIUNIFIEDMARKET = function(message)
+SLASH_MARKETEERFOREVERCRAFT1 = "/nokiunic"
+SlashCmdList.MARKETEERFOREVERCRAFT = function(message)
   if not market then return end
   local command, value = message:match("^%s*(%S*)%s*(.-)%s*$")
   command = command:lower()
   local id = tonumber(value:match("item:(%d+)") or value:match("^(%d+)$"))
-  if command == "why" and id and NokiUnifiedMarketExplainItem then
-    NokiUnifiedMarketExplainItem(id)
+  if command == "why" and id and MarketeerForeverCraftExplainItem then
+    MarketeerForeverCraftExplainItem(id)
   elseif command == "auto" and (value == "on" or value == "off") then
-    NokiUnifiedCore.SetAutoScan(value == "on"); say("Automatic scans " .. value .. ".")
+    MarketeerForeverCore.SetAutoScan(value == "on"); say("Automatic scans " .. value .. ".")
   elseif command == "interval" and tonumber(value) and tonumber(value) >= 30 then
-    NokiUnifiedCore.SetAutoScanInterval(tonumber(value));say("Scan interval: " .. NokiUnifiedCore.AutoScanInterval() .. " minutes.")
+    MarketeerForeverCore.SetAutoScanInterval(tonumber(value));say("Scan interval: " .. MarketeerForeverCore.AutoScanInterval() .. " minutes.")
   elseif command == "add" and id and id > 0 then
     market.watch[tostring(id)] = true; auctionatorSample(id); say("Watching item " .. id .. ".")
   elseif command == "remove" and id then
