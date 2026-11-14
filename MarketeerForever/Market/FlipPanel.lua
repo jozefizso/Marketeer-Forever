@@ -321,7 +321,7 @@ local function calculate()
       status:SetText("Enter non-negative filters; max spend may be blank.");filterAndSort();return
     end
     MarketeerForeverMarketDB.craftBudgetSilver=budgetBox:GetText();MarketeerForeverMarketDB.craftMinSales=sales;MarketeerForeverMarketDB.craftMinProfit=gain
-    local found,err,stats=MarketeerForeverMarketCraftCandidates(gain,sales,MarketeerForeverMarketDB.flipMatchPrice==true,MarketeerForeverMarketDB.craftKnownOnly==true,budget and budget*100 or nil)
+    local found,err,stats=MarketeerForeverMarketCraftCandidates(gain,sales,true,MarketeerForeverMarketDB.craftKnownOnly==true,budget and budget*100 or nil)
     if err then status:SetText(err);filterAndSort();return end
     for _,item in ipairs(found) do
       item.id=item.recipe.output;item.key=tostring(item.recipe.id);item.name=item.recipe.name;item.vendor=item.recipe.profession
@@ -349,7 +349,6 @@ local function calculate()
   MarketeerForeverMarketDB.flipBudgetSilver=silver or ""
   MarketeerForeverMarketDB.flipMinSalesPerDay=minSales or ""
   local budget=silver and math.floor(silver*100) or nil
-  local matchPrice=MarketeerForeverMarketDB.flipMatchPrice == true
   local priceByItem,variants={},{ }
   for _,row in ipairs(scan.rows) do
     if row.itemID and ((row.itemSuffix or 0)~=0 or (row.battlePetSpeciesID or 0)~=0) then variants[row.itemID]=false end
@@ -370,7 +369,7 @@ local function calculate()
     if ah and cost and cost>0 and stack and stack>0 and (not budget or cost<=budget) then
       local packs=budget and math.floor(budget/cost) or 1
       local buyUnit=cost/stack
-      local sellUnit=math.floor(ah.price)-(matchPrice and 0 or 1)
+      local sellUnit=math.floor(ah.price)
       local gainUnit=sellUnit*0.95-buyUnit
       if sellUnit>=1 and gainUnit>0 then
         local remote=marketActivity(id,activityMarket)
@@ -396,7 +395,7 @@ local function calculate()
   local age=scan.completed and math.max(0,math.floor(((GetServerTime and GetServerTime()) or time())-scan.completed)) or nil
   local sourceAge=activityInfo and MarketeerForeverMarketActivityLabel(activityInfo) or (activityError or ("AHledger "..tostring(activityMarket).." no activity"))
   local function count(t) local n=0;for _ in pairs(t) do n=n+1 end;return n end
-  status:SetText("SCAN " .. (age and (math.floor(age/60) .. "m ago") or "unknown") .. "  |  " .. sourceAge .. "  | " .. (matchPrice and "MATCH" or "UNDERCUT 1c") .. " | excluded: " .. count(unknown) .. " unknown, " .. count(zero) .. " zero, " .. count(below) .. " below minimum")
+  status:SetText("SCAN " .. (age and (math.floor(age/60) .. "m ago") or "unknown") .. "  |  " .. sourceAge .. "  | Match lowest | excluded: " .. count(unknown) .. " unknown, " .. count(zero) .. " zero, " .. count(below) .. " below minimum")
   filterAndSort()
 end
 function MarketeerForeverCore.VendorResaleTotals(vendorSell,tiers)
@@ -506,21 +505,6 @@ local function createPanel()
   searchBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();scrollOffset=0;if viewMode=="resale" then filterAndSort() else calculate() end end)
   searchHint=makeText(panel,nil,365,-80,130,"GameFontDisableSmall");searchHint:SetText("Search name, vendor or ID")
   sortButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");sortButton:SetSize(140,24);sortButton:SetPoint("TOPLEFT",panel,"TOPLEFT",470,-54);sortButton:SetText("Sort: " .. sortLabels[sortMode]);sortButton:SetScript("OnClick",function() sortMode=sortMode=="gain" and "roi" or sortMode=="roi" and "activity" or sortMode=="activity" and viewMode=="flips" and "gap" or "gain";gapAscending=false;sortButton:SetText("Sort: " .. (viewMode=="craft" and sortMode=="gain" and "Gain per craft" or sortLabels[sortMode]));filterAndSort(true) end)
-  local pricing=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");pricing:SetSize(95,24);pricing:SetPoint("TOPLEFT",panel,"TOPLEFT",620,-54)
-  local undercut=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");undercut:SetSize(110,24);undercut:SetPoint("TOPLEFT",panel,"TOPLEFT",720,-54)
-  local function updatePricing()
-    pricing:SetText(MarketeerForeverMarketDB.flipMatchPrice and "Match: ON" or "Match: OFF")
-    undercut:SetText(MarketeerForeverMarketDB.flipMatchPrice and "Under 1c: OFF" or "Under 1c: ON")
-  end
-  local function setPricing(match) MarketeerForeverMarketDB.flipMatchPrice=match;updatePricing();calculate() end
-  pricing:SetScript("OnClick",function() setPricing(true) end)
-  undercut:SetScript("OnClick",function() setPricing(false) end)
-  local function pricingTip(self)
-    if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_TOP");GameTooltip:SetText("Price used for profit calculations");GameTooltip:AddLine("Match the scanned low, or undercut it by 1 copper. This does not post an auction.",1,1,1,true);GameTooltip:Show() end
-  end
-  pricing:SetScript("OnEnter",pricingTip);undercut:SetScript("OnEnter",pricingTip)
-  pricing:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end);undercut:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
-  updatePricing()
   minProfitLabel=makeText(panel,nil,18,-80,125,"GameFontNormalSmall");minProfitLabel:SetText("MIN PACK GAIN (S)")
   minStackProfitBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");minStackProfitBox:SetSize(48,20);minStackProfitBox:SetPoint("TOPLEFT",panel,"TOPLEFT",155,-74);minStackProfitBox:SetAutoFocus(false);minStackProfitBox:SetFontObject("GameFontHighlight");minStackProfitBox:SetText(tostring((MarketeerForeverMarketDB and MarketeerForeverMarketDB.flipMinPackProfitSilver) or 0));minStackProfitBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);minStackProfitBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
   status=makeText(panel,nil,18,-101,690,"GameFontHighlightSmall");status:SetText("Waiting for auction data.")
@@ -572,7 +556,7 @@ local function createPanel()
   resaleViewButton:SetScript("OnClick",function()
     openResale(selectedItem)
   end)
-  flipControls={budgetLabel,budgetBox,minLabel,minSalesBox,minProfitLabel,minStackProfitBox,sortButton,pricing,undercut}
+  flipControls={budgetLabel,budgetBox,minLabel,minSalesBox,minProfitLabel,minStackProfitBox,sortButton}
   modeButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");modeButton:SetSize(125,22);modeButton:SetPoint("TOPLEFT",panel,"TOPLEFT",220,-77)
   knownButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");knownButton:SetSize(125,22);knownButton:SetPoint("TOPLEFT",panel,"TOPLEFT",335,-77)
   knownButton:SetScript("OnClick",function() MarketeerForeverMarketDB.craftKnownOnly=not MarketeerForeverMarketDB.craftKnownOnly;knownButton:SetText(MarketeerForeverMarketDB.craftKnownOnly and "Known only" or "All recipes");calculate() end)
@@ -627,10 +611,10 @@ function MarketeerForeverMarketExplainItem(id)
     if row.itemID==id and (row.itemSuffix or 0)==0 and (row.battlePetSpeciesID or 0)==0 and type(row.price)=="number" and row.price>0 and (not lowest or row.price<lowest) then lowest=row.price;quantity=row.quantity end
   end
   if not lowest then print("Market Vision: item " .. id .. " has no matching price in the last completed scan.");return end
-  local sell=math.floor(lowest)-((MarketeerForeverMarketDB and MarketeerForeverMarketDB.flipMatchPrice) and 0 or 1)
+  local sell=math.floor(lowest)
   local remote=marketActivity(id,usableHistory())
   print("Market Vision: item " .. id .. "; last scan low " .. copper(lowest) .. "; proposed sale " .. copper(sell) .. "; listed " .. tostring(quantity or "unknown") .. "; est/day " .. tostring(remote and remote.sales or "unknown") .. ".")
-  if sell<1 then print("Market Vision: excluded because a 1c auction cannot be undercut by 1c. Use MATCH if desired.");return end
+  if sell<1 then print("Market Vision: no valid positive sale price.");return end
   local budget=tonumber(MarketeerForeverMarketDB.flipBudgetSilver)
   if budget then budget=budget*100 end
   local minimum=tonumber(MarketeerForeverMarketDB.flipMinSalesPerDay) or 0

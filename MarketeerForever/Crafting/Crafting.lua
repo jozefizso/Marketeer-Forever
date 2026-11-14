@@ -156,7 +156,7 @@ function MarketeerForeverCraftCraftCandidates(minProfitSilver,minSales,match,kno
       elseif sales<=0 then activity=activity+1; zeroSales=zeroSales+1
       elseif sales<minSales then activity=activity+1; belowSales=belowSales+1
       else
-        local sell=math.floor(low)-(match and 0 or 1)
+        local sell=math.floor(low)
         local gainMin=recipe.yieldMin*sell*0.95-cost
         local gainMax=recipe.yieldMax*sell*0.95-cost
         if sell>=1 and gainMax>0 and gainMax>=minProfitSilver*100 then
@@ -186,8 +186,9 @@ SlashCmdList.MARKETEERFOREVERCRAFTCRAFT=function(msg)
   if args[1]=="capture" then capture();return end
   if args[1]=="find" then
     local profit=tonumber(args[2] or "0");local sales=tonumber(args[3] or "1")
-    if not profit or not sales or profit<0 or sales<0 or (args[4] and args[4]~="match" and args[4]~="under") or (args[5] and args[5]~="known" and args[5]~="all") then print("Market Crafting: /nmcraft find [min profit silver] [min sales/day] [under|match] [all|known]");return end
-    find(profit,sales,args[4]=="match",args[5]=="known");return
+    local mode=args[4];if mode=="match" then mode=args[5] end
+    if not profit or not sales or profit<0 or sales<0 or (mode and mode~="known" and mode~="all") or (args[5] and args[4]~="match") then print("Market Crafting: /nmcraft find [min profit silver] [min sales/day] [all|known]");return end
+    find(profit,sales,true,mode=="known");return
   end
-  print("Market Crafting: /nmcraft capture (open profession and expand categories); /nmcraft find [min profit silver] [min sales/day] [under|match] [all|known].")
+  print("Market Crafting: /nmcraft capture (open profession and expand categories); /nmcraft find [min profit silver] [min sales/day] [all|known].")
 end
