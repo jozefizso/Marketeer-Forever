@@ -37,6 +37,7 @@ function core.ImportTable(text)
   if MarketeerForeverMarketRefreshFlips then MarketeerForeverMarketRefreshFlips() end
   if MarketeerForeverCraftRefreshFlips then MarketeerForeverCraftRefreshFlips() end
   if core.RefreshBagRules then core.RefreshBagRules() end
+  if core.RefreshBagValue then core.RefreshBagValue() end
   return {market=market,count=count,updated=updated}
 end
 local window,box,resultText

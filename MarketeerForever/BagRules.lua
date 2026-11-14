@@ -3,6 +3,12 @@ local core=MarketeerForeverCore
 local dots=setmetatable({},{__mode="k"})
 local pending,window,rows,status=false,nil,{},nil
 local defaults={{threshold=15,r=1,g=0,b=0},{threshold=10,r=1,g=1,b=0},{threshold=-1,r=0,g=1,b=0}}
+local function ruleMethod(rule)
+  if rule.method=="auction" or rule.method=="vendor" then return rule.method end
+  -- Existing color-only rules have no sale method. Seed a sensible starting
+  -- choice without changing their colors or percentage thresholds.
+  return type(rule.threshold)=="number" and rule.threshold>=10 and "auction" or "vendor"
+end
 local function rules()
   if not MarketeerForeverCoreDB then return {} end
   local db=MarketeerForeverCoreDB
@@ -37,6 +43,25 @@ local function vendorFor(id,link)
   local values={pcall(getInfo,link or id)}
   if values[1] and type(values[12])=="number" then return values[12] end
   if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID,id) end
+end
+function core.BagRuleValue(item)
+  if type(item)~="table" then return nil end
+  local id=item.itemID or (item.hyperlink and tonumber(item.hyperlink:match("item:(%d+)")))
+  if not id then return nil end
+  local ah,vendor=priceFor(id),vendorFor(id,item.hyperlink)
+  ah=type(ah)=="number" and ah>0 and ah or nil
+  vendor=type(vendor)=="number" and vendor>0 and vendor or nil
+  if ah and vendor then
+    local percent=(ah-vendor)*100/ah
+    for _,rule in ipairs(rules()) do
+      if type(rule.threshold)=="number" and percent>rule.threshold then
+        if ruleMethod(rule)=="auction" then return ah,"auction" else return vendor,"vendor" end
+      end
+    end
+    return vendor,"vendor"
+  end
+  if vendor then return vendor,"vendor" end
+  if ah then return ah,"auction" end
 end
 local function paint(button,bag,slot)
   local dot=dots[button]
@@ -174,14 +199,23 @@ local function buildWindow()
     local y=-110-(i-1)*39
     local label=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");label:SetPoint("TOPLEFT",20,y-5);label:SetText("AH difference greater than")
     row.threshold=CreateFrame("EditBox",nil,window,"InputBoxTemplate");row.threshold:SetSize(55,24);row.threshold:SetPoint("TOPLEFT",170,y);row.threshold:SetAutoFocus(false);row.threshold:SetMaxLetters(8)
-    local suffix=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");suffix:SetPoint("TOPLEFT",230,y-5);suffix:SetText("% of AH   Color =")
+    local suffix=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");suffix:SetPoint("TOPLEFT",230,y-5);suffix:SetText("% of AH")
+    row.method=CreateFrame("Frame",nil,window,"UIDropDownMenuTemplate");row.method:SetPoint("TOPLEFT",270,y+4);UIDropDownMenu_SetWidth(row.method,75)
+    UIDropDownMenu_Initialize(row.method,function()
+      for _,choice in ipairs({{"AH","auction"},{"Vendor","vendor"}}) do
+        local label,value=choice[1],choice[2]
+        local info=UIDropDownMenu_CreateInfo();info.text=label;info.checked=row.saleMethod==value
+        info.func=function() row.saleMethod=value;UIDropDownMenu_SetText(row.method,label) end
+        UIDropDownMenu_AddButton(info)
+      end
+    end)
     row.color=CreateFrame("Button",nil,window,"BackdropTemplate");row.color:SetSize(27,24);row.color:SetPoint("TOPLEFT",375,y);row.color:SetBackdrop({edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});row.color:SetBackdropBorderColor(.8,.8,.8,1)
     row.swatch=row.color:CreateTexture(nil,"ARTWORK");row.swatch:SetPoint("TOPLEFT",2,-2);row.swatch:SetPoint("BOTTOMRIGHT",-2,2)
     row.color:SetScript("OnClick",function() chooseColor(row) end)
     row.remove=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");row.remove:SetSize(80,24);row.remove:SetPoint("TOPLEFT",425,y);row.remove:SetText("Remove")
     row.remove:SetScript("OnClick",function()
-      for n=i,5 do local nextRow=rows[n+1];local dest=rows[n];dest.threshold:SetText(nextRow.threshold:GetText());dest.r,dest.g,dest.b=nextRow.r,nextRow.g,nextRow.b;dest.swatch:SetColorTexture(dest.r,dest.g,dest.b,1) end
-      local last=rows[6];last.threshold:SetText("");last.r,last.g,last.b=1,1,1;last.swatch:SetColorTexture(1,1,1,1)
+      for n=i,5 do local nextRow=rows[n+1];local dest=rows[n];dest.threshold:SetText(nextRow.threshold:GetText());dest.r,dest.g,dest.b=nextRow.r,nextRow.g,nextRow.b;dest.saleMethod=nextRow.saleMethod;UIDropDownMenu_SetText(dest.method,dest.saleMethod=="auction" and "AH" or "Vendor");dest.swatch:SetColorTexture(dest.r,dest.g,dest.b,1) end
+      local last=rows[6];last.threshold:SetText("");last.r,last.g,last.b=1,1,1;last.saleMethod="vendor";UIDropDownMenu_SetText(last.method,"Vendor");last.swatch:SetColorTexture(1,1,1,1)
     end)
   end
   status=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");status:SetPoint("BOTTOMLEFT",20,49);status:SetWidth(490);status:SetJustifyH("LEFT")
@@ -195,20 +229,20 @@ local function buildWindow()
         if not threshold or threshold < -9900 or threshold>100 then status:SetText("Enter a percentage from -9900 to 100.");return end
         if seen[threshold] then status:SetText("Each percentage must be different.");return end
         seen[threshold]=true
-        nextRules[#nextRules+1]={threshold=threshold,r=row.r,g=row.g,b=row.b}
+        nextRules[#nextRules+1]={threshold=threshold,r=row.r,g=row.g,b=row.b,method=row.saleMethod or "vendor"}
       end
     end
     table.sort(nextRules,function(a,b) return a.threshold>b.threshold end)
     MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.bagRules=nextRules;MarketeerForeverCoreDB.bagRulesVersion=3
-    status:SetText("Rules saved. Items without matching prices have no marker.");schedule()
+    status:SetText("Rules saved. Bag value uses each matching rule's sale method.");schedule();if core.RefreshBagValue then core.RefreshBagValue() end
   end)
   local excluded=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");excluded:SetSize(125,25);excluded:SetPoint("BOTTOMLEFT",20,14);excluded:SetText("Excluded items")
   excluded:SetScript("OnClick",function() if core.ShowBagExclusions then core.ShowBagExclusions() end end)
   local close=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");close:SetSize(90,25);close:SetPoint("BOTTOMRIGHT",-22,14);close:SetText("Close");close:SetScript("OnClick",function() window:Hide() end)
   window:SetScript("OnShow",function()
     local saved=rules()
-    for i,row in ipairs(rows) do local rule=saved[i];row.threshold:SetText(rule and tostring(rule.threshold) or "");row.r,row.g,row.b=rule and rule.r or 1,rule and rule.g or 1,rule and rule.b or 1;row.swatch:SetColorTexture(row.r,row.g,row.b,1) end
-    status:SetText("Prices use the last scan, then the AHledger low. AH cut, binding and deposits are not included.")
+    for i,row in ipairs(rows) do local rule=saved[i];row.threshold:SetText(rule and tostring(rule.threshold) or "");row.r,row.g,row.b=rule and rule.r or 1,rule and rule.g or 1,rule and rule.b or 1;row.saleMethod=rule and ruleMethod(rule) or "vendor";UIDropDownMenu_SetText(row.method,row.saleMethod=="auction" and "AH" or "Vendor");row.swatch:SetColorTexture(row.r,row.g,row.b,1) end
+    status:SetText("Each rule chooses AH or vendor for bag value. AH cut, binding and deposits are not included.")
   end)
   window:Hide()
 end

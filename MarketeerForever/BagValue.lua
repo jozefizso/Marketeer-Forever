@@ -1,4 +1,4 @@
--- Estimated auction value of items carried in the combined bags.
+-- Estimated value of items carried in bags, using each selling rule's method.
 local core=MarketeerForeverCore
 local display, valueButton, ellesmereButton, pending
 local function money(value)
@@ -13,9 +13,7 @@ end
 local function refresh()
   pending=false
   if not valueButton then return end
-  local market=core.Market()
-  local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
-  local total,missing,priced,excluded,eligible=0,0,0,0,0
+  local total,missing,priced,excluded,eligible,auctionCount,vendorCount=0,0,0,0,0,0,0
   local container=C_Container
   if not container or not container.GetContainerNumSlots or not container.GetContainerItemInfo then
     valueButton.valueText="--"
@@ -33,21 +31,18 @@ local function refresh()
           excluded=excluded+1
         else
         eligible=eligible+1
-        local row=id and book and book.items and book.items[id]
-        local price=row and row.price
-        if not (type(price)=="number" and price>0) and id and MarketeerForeverAPI then
-          local reference=MarketeerForeverAPI.GetPrice(id)
-          price=reference and reference.minBuyout
-        end
+        local price,method
+        if core.BagRuleValue then price,method=core.BagRuleValue(item) end
         if type(price)=="number" and price>0 then
           total=total+price*(item.stackCount or 1);priced=priced+1
+          if method=="auction" then auctionCount=auctionCount+1 elseif method=="vendor" then vendorCount=vendorCount+1 end
         else missing=missing+1 end
         end
       end
     end
   end
   valueButton.valueText=(priced>0 or eligible==0) and money(total) or "--"
-  valueButton.detail=missing.." item stack"..(missing==1 and "" or "s").." without a price; "..excluded.." excluded."
+  valueButton.detail=auctionCount.." AH and "..vendorCount.." vendor stacks; "..missing.." without a price; "..excluded.." excluded."
 end
 local function schedule()
   if pending then return end
@@ -90,8 +85,8 @@ local function showValueTooltip(self)
   GameTooltip:SetOwner(self,"ANCHOR_TOP")
   GameTooltip:AddLine("Estimated bag value")
   GameTooltip:AddLine((valueButton and valueButton.valueText) or "--",1,1,1)
-  GameTooltip:AddLine("Uses your last scanned auction price, then the imported auction reference price. Stack quantities are included.",1,1,1,true)
-  GameTooltip:AddLine("Prices may be old. Bound items are included; auction fees are not deducted.",1,1,1,true)
+  GameTooltip:AddLine("Uses each matching bag rule's AH or vendor value. Without a match, uses vendor; if only one price is available, uses that price. Stack quantities are included.",1,1,1,true)
+  GameTooltip:AddLine("AH values use the last scan, then the imported reference. Bound items are included; auction fees are not deducted.",1,1,1,true)
   GameTooltip:AddLine((valueButton and valueButton.detail) or "",1,.8,.3,true)
   GameTooltip:AddLine("Click for Marketeer's bag tools.",.7,.8,.75,true)
   GameTooltip:Show()
@@ -181,7 +176,7 @@ local function setup()
   schedule()
 end
 local events=CreateFrame("Frame")
-for _,event in ipairs({"PLAYER_LOGIN","ADDON_LOADED","BAG_UPDATE_DELAYED","PLAYER_REGEN_ENABLED","PLAYER_REGEN_DISABLED"}) do events:RegisterEvent(event) end
+for _,event in ipairs({"PLAYER_LOGIN","ADDON_LOADED","BAG_UPDATE_DELAYED","GET_ITEM_INFO_RECEIVED","PLAYER_REGEN_ENABLED","PLAYER_REGEN_DISABLED"}) do events:RegisterEvent(event) end
 events:SetScript("OnEvent",function(_,event)
   if event=="PLAYER_LOGIN" or event=="ADDON_LOADED" or event=="PLAYER_REGEN_ENABLED" then setupValueButton();setup();setupEllesmereButton() end
   if event=="PLAYER_REGEN_DISABLED" and display then finishDrag(display) end
