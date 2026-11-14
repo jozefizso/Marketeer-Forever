@@ -44,6 +44,14 @@ local function vendorFor(id,link)
   if values[1] and type(values[12])=="number" then return values[12] end
   if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID,id) end
 end
+local function matchingRule(id,link)
+  local ah,vendor=priceFor(id),vendorFor(id,link)
+  if type(ah)~="number" or ah<=0 or type(vendor)~="number" or vendor<=0 then return nil end
+  local percent=(ah-vendor)*100/ah
+  for _,rule in ipairs(rules()) do
+    if type(rule.threshold)=="number" and percent>rule.threshold then return rule end
+  end
+end
 function core.BagRuleValue(item)
   if type(item)~="table" then return nil end
   local id=item.itemID or (item.hyperlink and tonumber(item.hyperlink:match("item:(%d+)")))
@@ -73,16 +81,7 @@ local function paint(button,bag,slot)
   end
   local info=C_Container and C_Container.GetContainerItemInfo and C_Container.GetContainerItemInfo(bag,slot)
   local id=info and (info.itemID or (info.hyperlink and tonumber(info.hyperlink:match("item:(%d+)"))))
-  local selected
-  if id then
-    local ah=priceFor(id);local vendor=vendorFor(id,info.hyperlink)
-    if type(ah)=="number" and ah>0 and type(vendor)=="number" and vendor>0 then
-      local percent=(ah-vendor)*100/ah
-      for _,rule in ipairs(rules()) do
-        if type(rule.threshold)=="number" and percent>rule.threshold then selected=rule;break end
-      end
-    end
-  end
+  local selected=id and matchingRule(id,info.hyperlink)
   if not selected then if dot then dot:Hide() end;return end
   dot:SetColorTexture(selected.r or 1,selected.g or 1,selected.b or 1,1);dot:Show()
 end
@@ -146,6 +145,7 @@ local function refresh()
   if frame and frame.IsShown and frame:IsShown() then pcall(paintFrame,frame) end
   local ellesmere=_G.EUI_Bags or _G.EUI_MainBagFrame
   if ellesmere and ellesmere.IsShown and ellesmere:IsShown() then paintEllesmere(ellesmere._scrollChild,0) end
+  if Baganator and Baganator.API and Baganator.API.RequestItemButtonsRefresh then Baganator.API.RequestItemButtonsRefresh() end
 end
 local function schedule()
   if pending then return end
@@ -153,6 +153,21 @@ local function schedule()
   if C_Timer and C_Timer.After then C_Timer.After(.1,refresh) else refresh() end
 end
 core.RefreshBagRules=schedule
+local baganatorRegistered=false
+local function setupBaganator()
+  if baganatorRegistered or not Baganator or not Baganator.API or not Baganator.API.RegisterCornerWidget then return end
+  Baganator.API.RegisterCornerWidget("Marketeer selling rules","marketeer_selling_rules",function(texture,details)
+    if type(details)~="table" then return false end
+    local link=details.itemLink;local id=details.itemID or (type(link)=="string" and tonumber(link:match("item:(%d+)")))
+    if type(id)~="number" then return false end
+    local rule=matchingRule(id,link)
+    if not rule then return false end
+    texture:SetColorTexture(rule.r or 1,rule.g or 1,rule.b or 1,1);return true
+  end,function(button)
+    local marker=button:CreateTexture(nil,"OVERLAY",nil,7);marker:SetSize(9,9);return marker
+  end,{corner="bottom_left",priority=1})
+  baganatorRegistered=true
+end
 local hooked=setmetatable({},{__mode="k"})
 local function hookFrames()
   if not hooksecurefunc then return end
@@ -194,11 +209,11 @@ local function buildWindow()
   window:SetScript("OnDragStart",function(self) self:StartMoving() end);window:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
   window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,.98);window:SetBackdropBorderColor(.35,.42,.37,1)
   local title=window:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",16,-16);title:SetText("BAG SELLING RULES")
-  local note=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",16,-43);note:SetPoint("TOPRIGHT",-16,-43);note:SetJustifyH("LEFT");note:SetText("Difference is measured as a percentage of the AH price. Example: AH 1g, vendor 50s = 50% difference. The highest matching rule wins.")
+  local note=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",16,-43);note:SetPoint("TOPRIGHT",-16,-43);note:SetJustifyH("LEFT");note:SetText("AH premium is the AH price minus vendor value, divided by the AH price. Example: AH 1g, vendor 50s = 50%. The highest matching rule wins.")
   for i=1,6 do
     local row={};rows[i]=row
     local y=-110-(i-1)*39
-    local label=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");label:SetPoint("TOPLEFT",20,y-5);label:SetText("AH difference greater than")
+    local label=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");label:SetPoint("TOPLEFT",20,y-5);label:SetText("AH premium over vendor >")
     row.threshold=CreateFrame("EditBox",nil,window,"InputBoxTemplate");row.threshold:SetSize(55,24);row.threshold:SetPoint("TOPLEFT",170,y);row.threshold:SetAutoFocus(false);row.threshold:SetMaxLetters(8)
     local suffix=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");suffix:SetPoint("TOPLEFT",230,y-5);suffix:SetText("% of AH")
     row.method=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");row.method:SetSize(90,24);row.method:SetPoint("TOPLEFT",270,y)
@@ -252,5 +267,5 @@ function core.ToggleBagRules()
 end
 local events=CreateFrame("Frame")
 for _,event in ipairs({"PLAYER_LOGIN","ADDON_LOADED","BAG_UPDATE_DELAYED","GET_ITEM_INFO_RECEIVED","PLAYER_REGEN_ENABLED"}) do events:RegisterEvent(event) end
-events:SetScript("OnEvent",function(_,event) if event=="PLAYER_LOGIN" or event=="ADDON_LOADED" then hookFrames() end;schedule() end)
+events:SetScript("OnEvent",function(_,event) if event=="PLAYER_LOGIN" or event=="ADDON_LOADED" then hookFrames();setupBaganator() end;schedule() end)
 core.Subscribe(schedule)
