@@ -60,6 +60,20 @@ local function paint(button,bag,slot)
   end
   dot:SetColorTexture(selected.r or 1,selected.g or 1,selected.b or 1,1);dot:Show()
 end
+-- Recheck the exact bag slot when its item tooltip becomes available. Item
+-- details can arrive after the initial bag repaint, particularly after login.
+function core.RefreshBagRuleForTooltip(tooltip,id)
+  local button=tooltip and tooltip.GetOwner and tooltip:GetOwner()
+  if not button or not button.GetID then return end
+  local slot=button:GetID();local bag=button.GetBagID and button:GetBagID()
+  local parent=button.GetParent and button:GetParent()
+  if type(bag)~="number" and button._textOverlay and parent and parent.GetID then bag=parent:GetID() end
+  local last=(Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag) or NUM_BAG_SLOTS or 4
+  if type(bag)~="number" or bag<0 or bag>last or type(slot)~="number" or slot<1 then return end
+  local info=C_Container and C_Container.GetContainerItemInfo and C_Container.GetContainerItemInfo(bag,slot)
+  local itemID=info and (info.itemID or (info.hyperlink and tonumber(info.hyperlink:match("item:(%d+)"))))
+  if itemID==id then pcall(paint,button,bag,slot) end
+end
 -- Ellesmere's inventory owns a pooled set of standard item buttons under its
 -- scroll child. Their immediate parents carry bag IDs; buttons carry slot IDs.
 local function paintEllesmere(root,depth)
@@ -117,8 +131,10 @@ local hooked=setmetatable({},{__mode="k"})
 local function hookFrames()
   if not hooksecurefunc then return end
   local function hook(frame)
-    if frame and frame.UpdateItems and not hooked[frame] then
-      hooksecurefunc(frame,"UpdateItems",function() schedule() end);hooked[frame]=true
+    if frame and not hooked[frame] then
+      if frame.UpdateItems then hooksecurefunc(frame,"UpdateItems",function() schedule() end) end
+      if frame.HookScript then frame:HookScript("OnShow",function() schedule() end) end
+      hooked[frame]=true
     end
   end
   for i=1,(NUM_CONTAINER_FRAMES or 13) do hook(_G["ContainerFrame"..i]) end

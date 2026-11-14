@@ -207,6 +207,7 @@ local function addValue(tooltip,data)
   local link;if tooltip.GetItem then local _;_,link=tooltip:GetItem() end
   if not id then id=link and tonumber(link:match("item:(%d+)")) end
   if not id then if tooltip==GameTooltip then hideTrendPanel() end;return end
+  if tooltip==GameTooltip and MarketeerForeverCore.RefreshBagRuleForTooltip then MarketeerForeverCore.RefreshBagRuleForTooltip(tooltip,id) end
   local market=MarketeerForeverCore.Market();local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
   local row=book and book.items and book.items[id];local count,cost,isMerchant,isAuction=stackCount(tooltip,id)
   local now=(GetServerTime and GetServerTime()) or time()
