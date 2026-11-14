@@ -358,7 +358,7 @@ local function createPanel()
   for _,box in ipairs({budgetBox,minSalesBox,minStackProfitBox}) do box:SetScript("OnEditFocusLost",function(self) if viewMode=="craft" and not (self:GetText() or ""):match("%S") then self:SetText("0") end end) end
   status=makeText(panel,nil,18,-101,690,"GameFontHighlightSmall");status:SetText("Waiting for auction data.")
   local header=CreateFrame("Frame",nil,panel,"BackdropTemplate");header:SetPoint("TOPLEFT",panel,"TOPLEFT",10,-122);header:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-10,-122);header:SetHeight(22);header:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});header:SetBackdropColor(0.13,0.18,0.17,1)
-  local cols={{"ITEM / VENDOR",8,245},{"BUY / UNIT",265,95},{"SELL / UNIT",370,95},{"GAIN / UNIT",475,95},{"GAIN / PACK",580,100},{"ACTIVITY",690,90},{"LISTED",790,75},{"GAP / 1D",875,90}}
+  local cols={{"ITEM / VENDOR",8,245},{"BUY / UNIT",265,95},{"SELL / UNIT",370,95},{"GAIN / UNIT",475,95},{"GAIN / PACK",580,100},{"ACTIVITY",690,90},{"LISTED",790,75},{"GAP",875,90}}
   for i,c in ipairs(cols) do local t=makeText(header,nil,c[2],-5,c[3],"GameFontNormalSmall");t:SetText(c[1]);headerTexts[i]=t end
   rows={}
   for i=1,ROWS_PER_PAGE do
@@ -442,7 +442,7 @@ local function createPanel()
     modeButton:SetText(lookup and "Vendor flips" or "Item lookup")
     title:SetText(lookup and "ITEM LOOKUP" or craft and "CRAFTING PROFIT" or "VENDOR FLIP FINDER")
     subtitle:SetText(lookup and "Search loaded items by name, vendor or ID." or craft and "AH material costs; profit per craft. Max 0 means no limit. Capture recipes with a profession open." or "One-pack vendor cost vs sell price per unit. Select a row for details.")
-    local labels=lookup and {"ITEM / VARIANT","VENDOR / UNIT","AH LOW / UNIT","LISTED","VENDOR PACK","EST. / DAY","",""} or craft and {"RECIPE / PROFESSION","COST / CRAFT","SELL / UNIT","GAIN / CRAFT","YIELD","EST. / DAY","LISTED","GAP / 1D"} or {"ITEM / VENDOR","BUY / UNIT","SELL / UNIT","GAIN / UNIT","GAIN / PACK","ACTIVITY","",""}
+    local labels=lookup and {"ITEM / VARIANT","VENDOR / UNIT","AH LOW / UNIT","LISTED","VENDOR PACK","EST. / DAY","",""} or craft and {"RECIPE / PROFESSION","COST / CRAFT","SELL / UNIT","GAIN / CRAFT","YIELD","EST. / DAY","LISTED","GAP"} or {"ITEM / VENDOR","BUY / UNIT","SELL / UNIT","GAIN / UNIT","GAIN / PACK","ACTIVITY","",""}
     for i,label in ipairs(labels) do headerTexts[i]:SetText(label) end
     calculate()
   end
