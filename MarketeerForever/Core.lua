@@ -1,6 +1,11 @@
 -- Noki local beta: native price-table reader and auction browse scanner.
 MarketeerForeverCore = {listeners={}, phase="idle", active=false, working={}}
 local core=MarketeerForeverCore
+function core.RegisterEscapeFrame(name)
+  if not UISpecialFrames then return end
+  for _,existing in ipairs(UISpecialFrames) do if existing==name then return end end
+  UISpecialFrames[#UISpecialFrames+1]=name
+end
 -- Some item-search results aggregate many unstackable items at one unit price.
 function core.ItemSearchUnitPrice(id,buyout,quantity)
   if type(buyout)~="number" or buyout<=0 or type(quantity)~="number" or quantity<=0 then return nil end

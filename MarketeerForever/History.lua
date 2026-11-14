@@ -11,9 +11,9 @@ local function label(parent,font,x,y,width)
 end
 local function button(parent,caption,x,y,w,action)
   local b=CreateFrame('Button',nil,parent,'BackdropTemplate');b:SetSize(w,23);b:SetPoint('TOPLEFT',parent,'TOPLEFT',x,y)
-  b:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});b:SetBackdropColor(.055,.09,.075,1);b:SetBackdropBorderColor(.32,.36,.25,1)
+  b:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});b:SetBackdropColor(.07,.09,.08,1);b:SetBackdropBorderColor(.20,.38,.28,1)
   local t=b:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall');t:SetPoint('CENTER');t:SetText(caption);b.caption=t
-  b:SetScript('OnEnter',function(self)self:SetBackdropBorderColor(.72,.59,.32,1)end);b:SetScript('OnLeave',function(self)self:SetBackdropBorderColor(.32,.36,.25,1)end);b:SetScript('OnClick',action);return b
+  b:SetScript('OnEnter',function(self)self:SetBackdropBorderColor(.30,.78,.48,1)end);b:SetScript('OnLeave',function(self)self:SetBackdropBorderColor(.20,.38,.28,1)end);b:SetScript('OnClick',action);return b
 end
 local function dataFor(id)
   local d=_G.MarketeerForeverHistory;local market=core.Market()
@@ -40,18 +40,25 @@ function core.CreateHistoryPanel(parent)
   local input=CreateFrame('EditBox',nil,p,'InputBoxTemplate');input:SetSize(300,24);input:SetPoint('TOPLEFT',p,'TOPLEFT',30,-158);input:SetAutoFocus(false);input:SetMaxLetters(240)
   local name=label(p,'GameFontNormal',22,-194,570)
   local meta=label(p,'GameFontHighlightSmall',22,-215,580)
-  local chart=CreateFrame('Frame',nil,p,'BackdropTemplate');chart:SetPoint('TOPLEFT',p,'TOPLEFT',110,-276);chart:SetSize(480,175);chart:EnableMouse(true)
+  local chart=CreateFrame('Frame',nil,p,'BackdropTemplate');chart:SetPoint('TOPLEFT',p,'TOPLEFT',110,-276);chart:SetPoint('BOTTOMRIGHT',p,'BOTTOMRIGHT',-40,69);chart:EnableMouse(true)
   local hoverAnchor=CreateFrame('Frame',nil,chart);hoverAnchor:SetSize(1,1)
   chart:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});chart:SetBackdropColor(.03,.055,.05,.96);chart:SetBackdropBorderColor(.24,.38,.31,1)
   local status=label(p,'GameFontHighlightSmall',115,-345,465);status:SetText('Choose an item to see its market history.')
   local ytop=label(p,'GameFontHighlightSmall',22,-270,84);local ymid=label(p,'GameFontHighlightSmall',22,-353,84);local ybottom=label(p,'GameFontHighlightSmall',22,-438,84)
   local xleft=label(p,'GameFontHighlightSmall',110,-457,220);local xright=label(p,'GameFontHighlightSmall',420,-457,175);xright:SetJustifyH('RIGHT')
   local note=label(p,'GameFontHighlightSmall',22,-482,530);note:SetText('Hourly lowest buyouts. Gaps indicate missing data. Prices from AHledger (ahledger.com).')
+  ytop:ClearAllPoints();ytop:SetPoint('TOPLEFT',chart,'TOPLEFT',-88,6)
+  ymid:ClearAllPoints();ymid:SetPoint('LEFT',chart,'LEFT',-88,0)
+  ybottom:ClearAllPoints();ybottom:SetPoint('BOTTOMLEFT',chart,'BOTTOMLEFT',-88,0)
+  xleft:ClearAllPoints();xleft:SetPoint('TOPLEFT',chart,'BOTTOMLEFT',0,-6)
+  xright:ClearAllPoints();xright:SetPoint('TOPRIGHT',chart,'BOTTOMRIGHT',0,-6)
+  note:ClearAllPoints();note:SetPoint('BOTTOMLEFT',p,'BOTTOMLEFT',22,20)
+  status:ClearAllPoints();status:SetPoint('CENTER',chart,'CENTER',0,0)
   local range='all';local itemId;local lines={};local dots={};local displayed={};local graphStart,graphEnd
   local results,resultsPage,selectedResult={},1,1
   local searchIndex,indexData,indexCatalog,indexMarket
   local suppressSearch=false;local searchSerial=0;local renderedQuery
-  local resultPanel=CreateFrame('Frame',nil,p,'BackdropTemplate');resultPanel:SetPoint('TOPLEFT',input,'BOTTOMLEFT',-4,-3);resultPanel:SetSize(374,147);resultPanel:SetFrameLevel(p:GetFrameLevel()+20);resultPanel:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});resultPanel:SetBackdropColor(.025,.045,.038,1);resultPanel:SetBackdropBorderColor(.52,.45,.27,1);resultPanel:Hide()
+  local resultPanel=CreateFrame('Frame',nil,p,'BackdropTemplate');resultPanel:SetPoint('TOPLEFT',input,'BOTTOMLEFT',-4,-3);resultPanel:SetSize(374,147);resultPanel:SetFrameLevel(p:GetFrameLevel()+20);resultPanel:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});resultPanel:SetBackdropColor(.025,.045,.038,1);resultPanel:SetBackdropBorderColor(.22,.58,.36,1);resultPanel:Hide()
   local resultRows={};local resultPageLabel=label(resultPanel,'GameFontHighlightSmall',90,-125,275)
   local draw
   local function renderResults()
@@ -89,7 +96,7 @@ function core.CreateHistoryPanel(parent)
     ytop:SetText(money(maxY));ymid:SetText(money((minY+maxY)/2));ybottom:SetText(money(minY))
     xleft:SetText(date('%b %d %H:%M',graphStart));xright:SetText(date('%b %d %H:%M',displayed[#displayed].time))
     if not chart.CreateLine then status:SetText('Line graphs are unavailable in this client.');return end
-    local w,h=480,175;local previous
+    local w,h=chart:GetWidth(),chart:GetHeight();if not w or not h or w<=8 or h<=8 then return end;local previous
     for i,v in ipairs(displayed) do
       local x=(v.time-graphStart)/(graphEnd-graphStart)*(w-8)+4;local y=(v.price-minY)/(maxY-minY)*(h-8)+4;v.x=x;v.y=y
       local dot=dots[i] or chart:CreateTexture(nil,'OVERLAY');dots[i]=dot;dot:SetColorTexture(.35,.95,.65,1);dot:SetSize(4,4);dot:ClearAllPoints();dot:SetPoint('CENTER',chart,'BOTTOMLEFT',x,y);dot:Show()
@@ -154,6 +161,7 @@ function core.CreateHistoryPanel(parent)
   chart:SetScript('OnUpdate',function(self,delta)if self.hovered then self.elapsed=(self.elapsed or 0)+delta;if self.elapsed>=.1 then self.elapsed=0;hover() end end end)
   function p:SetItem(id) itemId=tonumber(id);if itemId then searchSerial=searchSerial+1;resultPanel:Hide();suppressSearch=true;input:SetText(itemNameFor(itemId) or tostring(itemId));suppressSearch=false;selectRange('all') end end
   function p:Refresh() if itemId then draw() end end
+  chart:SetScript('OnSizeChanged',function() if itemId then draw() end end)
   p:RegisterEvent('GET_ITEM_INFO_RECEIVED');p:SetScript('OnEvent',function(_,_,id,success)if success and id==itemId and p:IsShown() then draw() end end)
   selectRange('all');return p
 end

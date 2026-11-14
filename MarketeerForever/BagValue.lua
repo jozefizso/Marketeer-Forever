@@ -1,6 +1,6 @@
 -- Estimated auction value of items carried in the combined bags.
 local core=MarketeerForeverCore
-local display, valueButton, pending
+local display, valueButton, ellesmereButton, pending
 local function money(value)
   value=math.floor(value+0.5)
   local gold=math.floor(value/10000)
@@ -86,6 +86,16 @@ local function finishDrag(self)
     MarketeerForeverCoreDB.bagPosition={x=self.dragX,y=self.dragY,version=2}
   end
 end
+local function showValueTooltip(self)
+  GameTooltip:SetOwner(self,"ANCHOR_TOP")
+  GameTooltip:AddLine("Estimated bag value")
+  GameTooltip:AddLine((valueButton and valueButton.valueText) or "--",1,1,1)
+  GameTooltip:AddLine("Uses your last scanned auction price, then the imported auction reference price. Stack quantities are included.",1,1,1,true)
+  GameTooltip:AddLine("Prices may be old. Bound items are included; auction fees are not deducted.",1,1,1,true)
+  GameTooltip:AddLine((valueButton and valueButton.detail) or "",1,.8,.3,true)
+  GameTooltip:AddLine("Click for Marketeer's bag tools.",.7,.8,.75,true)
+  GameTooltip:Show()
+end
 local function setupValueButton()
   if valueButton or not ChatFrame1 then return end
   valueButton=CreateFrame("Button","MarketeerForeverBagValueButton",UIParent,"BackdropTemplate")
@@ -110,18 +120,20 @@ local function setupValueButton()
   local icon=valueButton:CreateTexture(nil,"ARTWORK")
   icon:SetPoint("CENTER");icon:SetSize(19,19);icon:SetTexture("Interface\\MoneyFrame\\UI-GoldIcon")
   valueButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
-  valueButton:SetScript("OnEnter",function(self)
-    GameTooltip:SetOwner(self,"ANCHOR_TOP")
-    GameTooltip:AddLine("Estimated bag value")
-    GameTooltip:AddLine(self.valueText or "--",1,1,1)
-    GameTooltip:AddLine("Uses your last scanned auction price, then the imported auction reference price. Stack quantities are included.",1,1,1,true)
-    GameTooltip:AddLine("Prices may be old. Bound items are included; auction fees are not deducted.",1,1,1,true)
-    GameTooltip:AddLine(self.detail or "",1,.8,.3,true)
-    GameTooltip:AddLine("Click for the Bag menu; drag to move this coin.",.7,.8,.75,true)
-    GameTooltip:Show()
-  end)
+  valueButton:SetScript("OnEnter",showValueTooltip)
   valueButton:SetScript("OnLeave",function() GameTooltip:Hide() end)
   core.UpdateBagCoinVisibility()
+end
+local function setupEllesmereButton()
+  local bags=_G.EUI_Bags or _G.EUI_MainBagFrame
+  if ellesmereButton or not bags or (InCombatLockdown and InCombatLockdown()) then return end
+  ellesmereButton=CreateFrame("Button",nil,bags,"BackdropTemplate");ellesmereButton:SetSize(24,24)
+  ellesmereButton:SetPoint("BOTTOMLEFT",bags,"BOTTOMLEFT",8,6);ellesmereButton:SetFrameLevel(bags:GetFrameLevel()+20)
+  ellesmereButton:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});ellesmereButton:SetBackdropColor(.035,.08,.055,.95);ellesmereButton:SetBackdropBorderColor(.25,.65,.40,1)
+  local icon=ellesmereButton:CreateTexture(nil,"ARTWORK");icon:SetPoint("CENTER");icon:SetSize(18,18);icon:SetTexture("Interface\\MoneyFrame\\UI-GoldIcon")
+  ellesmereButton:SetScript("OnClick",function() if core.OpenTradingMenu then core.OpenTradingMenu("bag") end end)
+  ellesmereButton:SetScript("OnEnter",showValueTooltip);ellesmereButton:SetScript("OnLeave",function() GameTooltip:Hide() end)
+  bags:HookScript("OnShow",schedule)
 end
 function core.UpdateBagCoinVisibility()
   if valueButton then valueButton:SetShown(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true) end
@@ -166,7 +178,7 @@ end
 local events=CreateFrame("Frame")
 for _,event in ipairs({"PLAYER_LOGIN","ADDON_LOADED","BAG_UPDATE_DELAYED","PLAYER_REGEN_ENABLED","PLAYER_REGEN_DISABLED"}) do events:RegisterEvent(event) end
 events:SetScript("OnEvent",function(_,event)
-  if event=="PLAYER_LOGIN" or event=="ADDON_LOADED" then setupValueButton();setup() end
+  if event=="PLAYER_LOGIN" or event=="ADDON_LOADED" or event=="PLAYER_REGEN_ENABLED" then setupValueButton();setup();setupEllesmereButton() end
   if event=="PLAYER_REGEN_DISABLED" and display then finishDrag(display) end
   if event=="PLAYER_LOGIN" or event=="PLAYER_REGEN_ENABLED" then restorePosition() end
   schedule()

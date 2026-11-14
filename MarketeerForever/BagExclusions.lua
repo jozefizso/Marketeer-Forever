@@ -64,6 +64,7 @@ end
 local function build()
   if window then return end
   window=CreateFrame("Frame","MarketeerForeverBagExclusionsWindow",UIParent,"BackdropTemplate")
+  core.RegisterEscapeFrame("MarketeerForeverBagExclusionsWindow")
   window:SetSize(530,430);window:SetPoint("CENTER");window:SetFrameStrata("FULLSCREEN_DIALOG");window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
   window:SetScript("OnDragStart",function(self) self:StartMoving() end);window:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
   window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,.98);window:SetBackdropBorderColor(.35,.42,.37,1)

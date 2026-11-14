@@ -4,32 +4,31 @@ local function text(parent,template,x,y,width)
   local f=parent:CreateFontString(nil,'OVERLAY',template);f:SetPoint('TOPLEFT',x,y);if width then f:SetWidth(width);f:SetJustifyH('LEFT') end;return f
 end
 local function button(parent,label,x,y,w,action)
-  local b=CreateFrame('Button',nil,parent,'BackdropTemplate');b:SetSize(w,26);b:SetPoint('TOPLEFT',x,y);b:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});b:SetBackdropColor(.055,.09,.075,1);b:SetBackdropBorderColor(.34,.36,.26,1)
+  local b=CreateFrame('Button',nil,parent,'BackdropTemplate');b:SetSize(w,26);b:SetPoint('TOPLEFT',x,y);b:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});b:SetBackdropColor(.07,.09,.08,1);b:SetBackdropBorderColor(.20,.38,.28,1)
   local t=b:CreateFontString(nil,'OVERLAY','GameFontNormal');t:SetPoint('CENTER');t:SetText(label)
-  b:SetScript('OnEnter',function(self)self:SetBackdropBorderColor(.75,.61,.32,1)end);b:SetScript('OnLeave',function(self)self:SetBackdropBorderColor(.34,.36,.26,1)end);b:SetScript('OnClick',action);return b
+  b:SetScript('OnEnter',function(self)self:SetBackdropBorderColor(.30,.78,.48,1)end);b:SetScript('OnLeave',function(self)self:SetBackdropBorderColor(.20,.38,.28,1)end);b:SetScript('OnClick',action);return b
 end
 local function build()
   if frame then return end
-  frame=CreateFrame('Frame','MarketeerForeverMenu',UIParent,'BackdropTemplate');frame:SetSize(630,520);frame:SetPoint('CENTER');frame:SetMovable(true);frame:EnableMouse(true);frame:RegisterForDrag('LeftButton');frame:SetClampedToScreen(true)
-  local function maxScale()
-    local w=UIParent.GetWidth and UIParent:GetWidth() or 0;local h=UIParent.GetHeight and UIParent:GetHeight() or 0
-    if type(w)=='number' and w>0 and type(h)=='number' and h>0 then return math.max(.65,math.min(1.5,(w-20)/630,(h-20)/520)) end
-    return 1.5
-  end
-  local function applyScale(value) value=math.max(.65,math.min(maxScale(),tonumber(value) or 1));frame:SetScale(value);if MarketeerForeverCoreDB then MarketeerForeverCoreDB.menuScale=value end end
-  applyScale(MarketeerForeverCoreDB and MarketeerForeverCoreDB.menuScale)
+  frame=CreateFrame('Frame','MarketeerForeverMenu',UIParent,'BackdropTemplate');frame:SetSize(790,520);frame:SetPoint('CENTER');frame:SetMovable(true);frame:SetResizable(true);frame:EnableMouse(true);frame:RegisterForDrag('LeftButton');frame:SetClampedToScreen(true)
+  core.RegisterEscapeFrame('MarketeerForeverMenu')
+  local screenW,screenH=UIParent:GetWidth(),UIParent:GetHeight()
+  local maxW,maxH=math.max(790,screenW-20),math.max(520,screenH-20)
+  if frame.SetResizeBounds then frame:SetResizeBounds(790,520,maxW,maxH) elseif frame.SetMinResize then frame:SetMinResize(790,520) end
+  local db=MarketeerForeverCoreDB or {};frame:SetSize(math.max(790,math.min(maxW,tonumber(db.menuWidth) or 790)),math.max(520,math.min(maxH,tonumber(db.menuHeight) or 520)))
   frame:SetScript('OnDragStart',function(s)s:StartMoving()end);frame:SetScript('OnDragStop',function(s)s:StopMovingOrSizing()end)
-  frame:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});frame:SetBackdropColor(.025,.045,.038,.98);frame:SetBackdropBorderColor(.49,.42,.25,1)
-  local accent=frame:CreateTexture(nil,'ARTWORK');accent:SetColorTexture(.65,.52,.25,1);accent:SetPoint('TOPLEFT',frame,'TOPLEFT',22,-57);accent:SetSize(586,1)
-  text(frame,'GameFontNormalLarge',22,-20):SetText('MARKETEER')
+  frame:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});frame:SetBackdropColor(.075,.08,.078,.98);frame:SetBackdropBorderColor(.25,.48,.34,1)
+  local sidebar=frame:CreateTexture(nil,'BACKGROUND');sidebar:SetColorTexture(.035,.045,.04,1);sidebar:SetPoint('TOPLEFT');sidebar:SetPoint('BOTTOMLEFT');sidebar:SetWidth(150)
+  local accent=frame:CreateTexture(nil,'ARTWORK');accent:SetColorTexture(.22,.65,.40,1);accent:SetPoint('TOPLEFT',frame,'TOPLEFT',150,-58);accent:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-1,-58);accent:SetHeight(1)
+  text(frame,'GameFontNormalLarge',18,-22):SetText('|cff62d68eMARKETEER|r')
+  local content=CreateFrame('Frame',nil,frame);content:SetPoint('TOPLEFT',frame,'TOPLEFT',150,0);content:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',0,0)
   local close=button(frame,'X',585,-14,28,function()frame:Hide()end);close:ClearAllPoints();close:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-15,-14);close:SetFrameLevel(frame:GetFrameLevel()+10)
   local resize=button(frame,'Resize',0,0,62,function()end);resize:ClearAllPoints();resize:SetSize(62,20);resize:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',-6,6)
-  resize:SetScript('OnMouseDown',function(self,mouseButton)if mouseButton~='LeftButton' then return end;self.startX,self.startY=GetCursorPosition();self.startScale=frame:GetScale();self.resizing=true end)
-  resize:SetScript('OnMouseUp',function(self)self.resizing=false end)
-  resize:SetScript('OnHide',function(self)self.resizing=false end)
-  resize:SetScript('OnUpdate',function(self)if not self.resizing then return end;if IsMouseButtonDown and not IsMouseButtonDown('LeftButton') then self.resizing=false;return end;local x,y=GetCursorPosition();local parentScale=UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1;if not parentScale or parentScale<=0 then parentScale=1 end;applyScale(self.startScale+((x-self.startX)-(y-self.startY))/(2*630*parentScale)) end)
+  resize:SetScript('OnMouseDown',function(_,mouseButton)if mouseButton=='LeftButton' then frame:StartSizing('BOTTOMRIGHT') end end)
+  local function finishResize() frame:StopMovingOrSizing();if MarketeerForeverCoreDB then MarketeerForeverCoreDB.menuWidth=frame:GetWidth();MarketeerForeverCoreDB.menuHeight=frame:GetHeight() end end
+  resize:SetScript('OnMouseUp',finishResize);resize:SetScript('OnHide',finishResize)
   resize:SetScript('OnEnter',function(self)if GameTooltip then GameTooltip:SetOwner(self,'ANCHOR_LEFT');GameTooltip:AddLine('Drag to resize Marketeer');GameTooltip:Show()end end);resize:SetScript('OnLeave',function()if GameTooltip then GameTooltip:Hide() end end)
-  bag=CreateFrame('Frame',nil,frame);bag:SetAllPoints()
+  bag=CreateFrame('Frame',nil,content);bag:SetAllPoints()
   text(bag,'GameFontNormal',22,-118):SetText('BAG TOOLS')
   text(bag,'GameFontHighlight',24,-151,565):SetText('Keep your bag tools close at hand. Deploy the coin, drag it anywhere, and click it to return here.')
   coinCheck=CreateFrame('CheckButton',nil,bag,'UICheckButtonTemplate');coinCheck:SetPoint('TOPLEFT',22,-205);coinCheck:SetSize(30,30)
@@ -38,10 +37,10 @@ local function build()
   button(bag,'Bag selling rules',24,-265,160,function()if core.ToggleBagRules then core.ToggleBagRules() end end)
   button(bag,'Excluded items',192,-265,160,function()if core.ShowBagExclusions then core.ShowBagExclusions() end end)
   text(bag,'GameFontHighlightSmall',24,-310,550):SetText('The coin tooltip shows estimated bag value. Selling rules and exclusions use your existing settings.')
-  history=core.CreateHistoryPanel(frame)
+  history=core.CreateHistoryPanel(content)
   local function selectTab(which) local h=which=='history';bag:SetShown(not h);history:SetShown(h);bagTab:SetAlpha(h and .65 or 1);historyTab:SetAlpha(h and 1 or .65);if h then history:Refresh() end end
-  bagTab=button(frame,'Bag',22,-75,100,function()selectTab('bag')end)
-  historyTab=button(frame,'Market history',130,-75,130,function()selectTab('history')end)
+  bagTab=button(frame,'Bag tools',10,-85,130,function()selectTab('bag')end)
+  historyTab=button(frame,'Market history',10,-118,130,function()selectTab('history')end)
   frame.selectTab=selectTab
   frame:SetScript('OnShow',function()coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true)end)
   frame:Hide()

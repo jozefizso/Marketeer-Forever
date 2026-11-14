@@ -54,9 +54,25 @@ local function paint(button,bag,slot)
   end
   if not selected then if dot then dot:Hide() end;return end
   if not dot then
-    dot=button:CreateTexture(nil,"OVERLAY",nil,7);dot:SetSize(9,9);dot:SetPoint("BOTTOMLEFT",button,"BOTTOMLEFT",3,3);dots[button]=dot
+    if InCombatLockdown and InCombatLockdown() then return end
+    local layer=button._textOverlay or button
+    dot=layer:CreateTexture(nil,"OVERLAY",nil,7);dot:SetSize(9,9);dot:SetPoint("BOTTOMLEFT",button,"BOTTOMLEFT",3,3);dots[button]=dot
   end
   dot:SetColorTexture(selected.r or 1,selected.g or 1,selected.b or 1,1);dot:Show()
+end
+-- Ellesmere's inventory owns a pooled set of standard item buttons under its
+-- scroll child. Their immediate parents carry bag IDs; buttons carry slot IDs.
+local function paintEllesmere(root,depth)
+  if not root or not root.GetChildren or (root.IsShown and not root:IsShown()) or depth>4 then return end
+  for _,child in ipairs({root:GetChildren()}) do
+    if child.IsShown and child:IsShown() then
+      if child.IsObjectType and child:IsObjectType("ItemButton") and child.GetID then
+        local parent=child:GetParent();local bag=parent and parent.GetID and parent:GetID();local slot=child:GetID()
+        local last=(Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag) or NUM_BAG_SLOTS or 4
+        if type(bag)=="number" and bag>=0 and bag<=last and type(slot)=="number" and slot>0 then pcall(paint,child,bag,slot) end
+      else paintEllesmere(child,depth+1) end
+    end
+  end
 end
 local function paintFrame(frame)
   if not frame or not frame.GetID then return end
@@ -86,6 +102,8 @@ local function refresh()
   end
   local frame=_G.ContainerFrameCombinedBags
   if frame and frame.IsShown and frame:IsShown() then pcall(paintFrame,frame) end
+  local ellesmere=_G.EUI_Bags or _G.EUI_MainBagFrame
+  if ellesmere and ellesmere.IsShown and ellesmere:IsShown() then paintEllesmere(ellesmere._scrollChild,0) end
 end
 local function schedule()
   if pending then return end
@@ -103,6 +121,11 @@ local function hookFrames()
   end
   for i=1,(NUM_CONTAINER_FRAMES or 13) do hook(_G["ContainerFrame"..i]) end
   hook(_G.ContainerFrameCombinedBags)
+  local ellesmere=_G.EUI_Bags or _G.EUI_MainBagFrame
+  if ellesmere and ellesmere.RefreshInventory and not hooked[ellesmere] then
+    hooksecurefunc(ellesmere,"RefreshInventory",function() schedule() end);hooked[ellesmere]=true
+    ellesmere:HookScript("OnShow",function() schedule() end)
+  end
 end
 local function chooseColor(row)
   if not ColorPickerFrame then return end
@@ -122,6 +145,7 @@ end
 local function buildWindow()
   if window then return end
   window=CreateFrame("Frame","MarketeerForeverBagRulesWindow",UIParent,"BackdropTemplate")
+  core.RegisterEscapeFrame("MarketeerForeverBagRulesWindow")
   window:SetSize(530,420);window:SetPoint("CENTER");window:SetFrameStrata("DIALOG");window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
   window:SetScript("OnDragStart",function(self) self:StartMoving() end);window:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
   window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,.98);window:SetBackdropBorderColor(.35,.42,.37,1)
@@ -175,6 +199,6 @@ function core.ToggleBagRules()
   if window:IsShown() then window:Hide() else window:Show() end
 end
 local events=CreateFrame("Frame")
-for _,event in ipairs({"PLAYER_LOGIN","ADDON_LOADED","BAG_UPDATE_DELAYED","GET_ITEM_INFO_RECEIVED"}) do events:RegisterEvent(event) end
+for _,event in ipairs({"PLAYER_LOGIN","ADDON_LOADED","BAG_UPDATE_DELAYED","GET_ITEM_INFO_RECEIVED","PLAYER_REGEN_ENABLED"}) do events:RegisterEvent(event) end
 events:SetScript("OnEvent",function(_,event) if event=="PLAYER_LOGIN" or event=="ADDON_LOADED" then hookFrames() end;schedule() end)
 core.Subscribe(schedule)

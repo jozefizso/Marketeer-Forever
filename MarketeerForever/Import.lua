@@ -43,6 +43,7 @@ local window,box,resultText
 local function createImport()
   if window then return end
   window=CreateFrame("Frame","MarketeerForeverImportFrame",UIParent,"BackdropTemplate");window:SetSize(600,400);window:SetPoint("CENTER");window:SetFrameStrata("FULLSCREEN_DIALOG");window:SetClampedToScreen(true);window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,1);window:SetBackdropBorderColor(.3,.38,.34,1)
+  core.RegisterEscapeFrame("MarketeerForeverImportFrame")
   local title=window:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",window,"TOPLEFT",16,-14);title:SetText("IMPORT MARKET DATA")
   local instructions=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");instructions:SetPoint("TOPLEFT",window,"TOPLEFT",16,-40);instructions:SetWidth(560);instructions:SetJustifyH("LEFT");instructions:SetText("At devvy.xyz/marketeer/, choose your market, copy the import string, and paste it below.")
   local background=CreateFrame("Frame",nil,window,"BackdropTemplate");background:SetPoint("TOPLEFT",window,"TOPLEFT",13,-68);background:SetPoint("BOTTOMRIGHT",window,"BOTTOMRIGHT",-17,57);background:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});background:SetBackdropColor(.02,.025,.025,1);background:SetBackdropBorderColor(.3,.35,.32,1)

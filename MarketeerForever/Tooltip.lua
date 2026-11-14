@@ -126,6 +126,24 @@ end
 -- A separate, non-interactive panel keeps market trends out of the item tooltip.
 local trendPanel
 local function hideTrendPanel() if trendPanel then trendPanel:Hide() end end
+local function placeTrendPanel(p,owner)
+  if not UIParent or not owner.GetLeft or not owner:GetLeft() then return end
+  local uiScale=UIParent:GetEffectiveScale();local function bounds(f)
+    if not f or not f.IsShown or not f:IsShown() or not f.GetLeft or not f:GetLeft() then return end
+    local ratio=f:GetEffectiveScale()/uiScale
+    return f:GetLeft()*ratio,f:GetRight()*ratio,f:GetTop()*ratio,f:GetBottom()*ratio
+  end
+  local left,right,top,bottom=bounds(owner);if not left then return end
+  for _,f in ipairs({ShoppingTooltip1,ShoppingTooltip2}) do
+    local l,r,t,b=bounds(f);if l then left=math.min(left,l);right=math.max(right,r);top=math.max(top,t);bottom=math.min(bottom,b) end
+  end
+  local width,height=p:GetWidth(),p:GetHeight();local sw,sh=UIParent:GetWidth(),UIParent:GetHeight()
+  p:ClearAllPoints()
+  if right+8+width<=sw then p:SetPoint("TOPLEFT",UIParent,"BOTTOMLEFT",right+8,math.min(sh,top))
+  elseif left-8-width>=0 then p:SetPoint("TOPLEFT",UIParent,"BOTTOMLEFT",left-8-width,math.min(sh,top))
+  elseif bottom-8-height>=0 then p:SetPoint("TOPLEFT",UIParent,"BOTTOMLEFT",math.max(0,math.min(sw-width,left)),bottom-8)
+  else p:SetPoint("BOTTOMLEFT",UIParent,"BOTTOMLEFT",math.max(0,math.min(sw-width,left)),math.min(sh-height,top+8)) end
+end
 local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,now)
   if not trendPanel then
     local p=CreateFrame("Frame",nil,UIParent,"BackdropTemplate");trendPanel=p
@@ -147,11 +165,10 @@ local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,no
       local o=self.trendOwner
       if not o or not o.IsShown or not o:IsShown() or not IsShiftKeyDown or not IsShiftKeyDown() then self:Hide();return end
       if o.GetItem then local _,link=o:GetItem();local currentId=type(link)=="string" and tonumber(link:match("item:(%d+)"));if currentId and currentId~=self.trendItem then self:Hide() end end
+      placeTrendPanel(self,o)
     end)
   end
-  local p=trendPanel;p.trendOwner=owner;p.trendItem=id;p:ClearAllPoints()
-  local right=owner.GetRight and owner:GetRight();local screen=UIParent and UIParent.GetRight and UIParent:GetRight()
-  if right and screen and right+275>screen then p:SetPoint("TOPRIGHT",owner,"TOPLEFT",-8,0) else p:SetPoint("TOPLEFT",owner,"TOPRIGHT",8,0) end
+  local p=trendPanel;p.trendOwner=owner;p.trendItem=id;placeTrendPanel(p,owner)
   p.currentLabel:SetText(current and (currentSource..(currentAge and (" ("..currentAge.."m ago)") or " (age ?)")) or "Latest AH price")
   p.currentValue:SetText(current and money(current) or "Unavailable")
   local periods={{"24 hours",trend and trend.p24},{"48 hours",trend and trend.p48},{"14 days",trend and trend.p14}}
@@ -173,7 +190,7 @@ local function addValue(tooltip,data)
   local id=data and data.id
   local link;if tooltip.GetItem then local _;_,link=tooltip:GetItem() end
   if not id then id=link and tonumber(link:match("item:(%d+)")) end
-  if not id then hideTrendPanel();return end
+  if not id then if tooltip==GameTooltip then hideTrendPanel() end;return end
   local market=MarketeerForeverCore.Market();local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
   local row=book and book.items and book.items[id];local count,cost,isMerchant,isAuction=stackCount(tooltip,id)
   local now=(GetServerTime and GetServerTime()) or time()
@@ -203,7 +220,7 @@ local function addValue(tooltip,data)
       pair("AH reference / unit"..(minutes and (" ("..minutes.."m ago)") or ""),money(reference.minBuyout))
     else pair("AH / unit","--") end
   end
-  if not IsShiftKeyDown or not IsShiftKeyDown() then hideTrendPanel();tooltip:Show();return end
+  if not IsShiftKeyDown or not IsShiftKeyDown() then if tooltip==GameTooltip then hideTrendPanel() end;tooltip:Show();return end
   local trend=MarketeerForeverAPI and MarketeerForeverAPI.GetTrend and MarketeerForeverAPI.GetTrend(id)
   if row and type(row.price)=="number" and row.price>0 then
     priceAge=type(row.observed)=="number" and math.max(0,math.floor((now-row.observed)/60)) or scanAge
@@ -233,7 +250,7 @@ local function addValue(tooltip,data)
     tooltip:AddLine(ageText.." | Sales data unavailable",.7,.8,.75)
   end
   tooltip:Show()
-  showTrendPanel(tooltip,id,trend,currentPrice,currentAge,currentSource,now)
+  if tooltip==GameTooltip then showTrendPanel(tooltip,id,trend,currentPrice,currentAge,currentSource,now) end
 end
 local function itemTooltipCallback(tooltip,data)
   if securecallfunction then securecallfunction(addValue,tooltip,data) else addValue(tooltip,data) end
