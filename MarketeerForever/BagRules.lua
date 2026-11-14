@@ -65,9 +65,9 @@ function core.BagRuleValue(item)
 end
 local function paint(button,bag,slot)
   local dot=dots[button]
-  -- Prepare markers for every slot outside combat, including currently empty
-  -- or unpriced slots, so they can be updated without creating regions later.
-  if not dot and not (InCombatLockdown and InCombatLockdown()) then
+  -- A texture is cosmetic: creating it does not create a protected item
+  -- button or change its actions. Bag slots may first appear during combat.
+  if not dot then
     local layer=button._textOverlay or button
     dot=layer:CreateTexture(nil,"OVERLAY",nil,7);dot:SetSize(9,9);dot:SetPoint("BOTTOMLEFT",button,"BOTTOMLEFT",3,3);dot:Hide();dots[button]=dot
   end
@@ -84,7 +84,6 @@ local function paint(button,bag,slot)
     end
   end
   if not selected then if dot then dot:Hide() end;return end
-  if not dot then return end
   dot:SetColorTexture(selected.r or 1,selected.g or 1,selected.b or 1,1);dot:Show()
 end
 -- Recheck the exact bag slot when its item tooltip becomes available. Item
