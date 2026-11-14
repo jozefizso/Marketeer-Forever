@@ -542,7 +542,7 @@ local function createPanel()
     row.selling=makeText(row,nil,166,-4,88,"GameFontHighlightSmall");row.selling:SetJustifyH("RIGHT")
     row.buy=makeText(row,nil,265,-11,95);row.ah=makeText(row,nil,370,-11,95);row.gain=makeText(row,nil,475,-11,95);row.gain:SetTextColor(0.45,0.9,0.64);row.stackGain=makeText(row,nil,580,-11,100);row.stackGain:SetTextColor(0.45,0.9,0.64);row.activity=makeText(row,nil,690,-11,90);row.listed=makeText(row,nil,790,-11,75);row.gap=makeText(row,nil,875,-11,90)
     row.resaleView=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.resaleView:SetSize(52,22);row.resaleView:SetPoint("TOPRIGHT",row,"TOPRIGHT",-5,-5);row.resaleView:SetText("View");row.resaleView:Hide();row.resaleView:SetScript("OnClick",function() if row.item then openResale(row.item) end end)
-    row:SetScript("OnClick",function(self) if self.item then setSelected(self.item) end end);rows[i]=row
+    row:SetScript("OnClick",function(self,button) if self.item then if (not button or button=="LeftButton") and IsAltKeyDown and IsAltKeyDown() and MarketeerForeverCore.ShowMarketHistory then MarketeerForeverCore.ShowMarketHistory(self.item.id) else setSelected(self.item) end end end);rows[i]=row
   end
   scrollbar=CreateFrame("Slider","MarketeerForeverMarketResultsScrollBar",panel,"UIPanelScrollBarTemplate")
   scrollbar:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-14,-161);scrollbar:SetSize(16,195)

@@ -5,6 +5,7 @@
 ## SavedVariables: MarketeerForeverCoreDB, MarketeerForeverMarketDB, MarketeerForeverCraftDB, NokiUnifiedCoreDB, NokiUnifiedMarketDB, NokiUnifiedCraftDB
 ## OptionalDeps: MarketeerForeverData
 Core.lua
+History.lua
 Menu.lua
 Trading.lua
 PendingSales.lua

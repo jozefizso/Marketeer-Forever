@@ -42,7 +42,7 @@ sealed class Updater : Form {
  async Task RunUpdate(){
   update.Enabled=false;timer.Stop();status.Text="Downloading market data...";
   string reg=MarketRegion(),rule=Ruleset(),fact=Faction(),dir=folder.Text.Trim();SaveSettings();
-  try{string outcome=await Task.Run(()=>{int count=FetchAndWrite(reg,rule,fact,dir);try{int trends=FetchTrends(reg,rule,fact,dir);return "Updated "+count+" items and "+trends+" trend records.";}catch(Exception e){return "Updated "+count+" items; trends unavailable: "+e.Message+". Previous trend data kept.";}});status.Text=outcome+" If WoW is open, type /reload; otherwise start WoW. Enable Marketeer Data in AddOns. Prices from AHledger (ahledger.com).";}
+  try{string outcome=await Task.Run(()=>{int count=FetchAndWrite(reg,rule,fact,dir);string result="Updated "+count+" items.";try{int trends=FetchTrends(reg,rule,fact,dir);result+=" Trends: "+trends+".";}catch(Exception e){result+=" Trends unavailable: "+e.Message+"; previous kept.";}try{int history=FetchHistory(reg,rule,fact,dir);result+=" History: "+history+".";}catch(Exception e){result+=" History unavailable: "+e.Message+"; previous kept.";}return result;});status.Text=outcome+" If WoW is open, type /reload; otherwise start WoW. Enable Marketeer Data in AddOns. Prices from AHledger (ahledger.com).";}
   catch(Exception e){status.Text="Update failed: "+e.Message+". Previous data was kept.";}
   finally{update.Enabled=true;if(auto.Checked)timer.Start();}
  }
@@ -69,7 +69,26 @@ sealed class Updater : Form {
   try{File.WriteAllText(tmp,result.ToString(),new UTF8Encoding(false));if(File.ReadAllText(tmp)!=result.ToString())throw new Exception("Data validation failed");if(File.Exists(target))File.Replace(tmp,target,null);else File.Move(tmp,target);}finally{if(File.Exists(tmp))File.Delete(tmp);}
   string dataToc=Path.Combine(dataDir,"MarketeerForeverData.toc"),tocTmp=dataToc+".tmp";
   string trendPath=Path.Combine(dataDir,"TrendData.lua");if(!File.Exists(trendPath))File.WriteAllText(trendPath,"-- Trend data not yet available.\n",new UTF8Encoding(false));
-  try{File.WriteAllText(tocTmp,"## Interface: "+match.Groups[1].Value+"\n## Title: Marketeer Data\n## Notes: AHledger data\nMarketData.lua\nTrendData.lua\n",new UTF8Encoding(false));if(File.Exists(dataToc))File.Replace(tocTmp,dataToc,null);else File.Move(tocTmp,dataToc);}finally{if(File.Exists(tocTmp))File.Delete(tocTmp);}return count;
+  string historyPath=Path.Combine(dataDir,"HistoryData.lua");if(!File.Exists(historyPath))File.WriteAllText(historyPath,"-- Price history not yet available.\n",new UTF8Encoding(false));
+  try{File.WriteAllText(tocTmp,"## Interface: "+match.Groups[1].Value+"\n## Title: Marketeer Data\n## Notes: AHledger data\nMarketData.lua\nTrendData.lua\nHistoryData.lua\n",new UTF8Encoding(false));if(File.Exists(dataToc))File.Replace(tocTmp,dataToc,null);else File.Move(tocTmp,dataToc);}finally{if(File.Exists(tocTmp))File.Delete(tocTmp);}return count;
+ }
+ int FetchHistory(string reg,string rule,string fact,string dir){
+  string market="forever/"+rule+"/"+fact+"/"+reg;
+  string url="https://devvy.xyz/marketeer/history-export.php?market="+Uri.EscapeDataString(market);
+  string text;using(var client=new WebClient()){client.Headers.Add(HttpRequestHeader.UserAgent,"MarketeerForeverDataUpdater/1.0");text=client.DownloadString(url);}
+  if(text.Length>20000000)throw new Exception("History data is too large");
+  string[] lines=text.Replace("\r","").TrimEnd('\n').Split('\n');string[] h=lines[0].Split('|');long generated;int count;
+  if(h.Length!=4||h[0]!="HST1"||h[1]!=market||!long.TryParse(h[2],out generated)||generated<=0||generated>DateTimeOffset.UtcNow.ToUnixTimeSeconds()+300||!int.TryParse(h[3],out count)||count<0||count>100000||lines.Length!=count+1)throw new Exception("Invalid history header");
+  var result=new StringBuilder("-- AHledger hourly lows and older daily medians.\n_G.MarketeerForeverHistory={schemaVersion=1,market=\"").Append(market).Append("\",generatedAt=").Append(generated).Append(",items={\n");
+  var seen=new HashSet<int>();
+  for(int i=1;i<lines.Length;i++){
+   int colon=lines[i].IndexOf(':');int id;if(colon<=0||!int.TryParse(lines[i].Substring(0,colon),out id)||id<=0||!seen.Add(id))throw new Exception("Invalid history item");
+   string points=lines[i].Substring(colon+1);string[] entries=points.Split(';');if(entries.Length<1||entries.Length>400)throw new Exception("Invalid history count");int previous=337;
+   foreach(string entry in entries){string[] fields=entry.Split(',');int age;long price;if(fields.Length!=2||!int.TryParse(fields[0],out age)||age<0||age>336||age>=previous||!long.TryParse(fields[1],out price)||price<=0||price>2000000000000L||!Regex.IsMatch(entry,@"^\d+,\d+$"))throw new Exception("Invalid history point");previous=age;}
+   result.Append('[').Append(id).Append("] = \"").Append(points).Append("\",\n");
+  }
+  result.Append("}}\n");string target=Path.Combine(Directory.GetParent(Path.GetFullPath(dir)).FullName,"MarketeerForeverData","HistoryData.lua"),tmp=target+".tmp";
+  try{File.WriteAllText(tmp,result.ToString(),new UTF8Encoding(false));if(File.ReadAllText(tmp)!=result.ToString())throw new Exception("History validation failed");if(File.Exists(target))File.Replace(tmp,target,null);else File.Move(tmp,target);}finally{if(File.Exists(tmp))File.Delete(tmp);}return count;
  }
  int FetchTrends(string reg,string rule,string fact,string dir){
   string market="forever/"+rule+"/"+fact+"/"+reg;

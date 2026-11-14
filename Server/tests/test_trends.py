@@ -12,6 +12,7 @@ import trends
 import retention
 import bulk
 import bulk_low
+import history_export
 
 NOW = 1_800_000_000
 MARKET = 'forever/pvp/horde/us'
@@ -88,6 +89,16 @@ class TrendTests(unittest.TestCase):
         fields=bulk_low.export(self.db,MARKET,NOW).splitlines()[1].split(':')
         self.assertEqual(fields[1], '160')
         self.assertEqual(fields[4], '160')
+
+    def test_history_export_preserves_recent_hours_and_aggregates_older_days(self):
+        for hour in range(80):
+            trends.ingest(self.db, snapshot(NOW-hour*3600-1, [(42, 100)]), NOW)
+        lines=history_export.export(self.db, MARKET, NOW).splitlines()
+        self.assertEqual(lines[0], 'HST1|%s|%d|1' % (MARKET,NOW))
+        points=lines[1].split(':',1)[1].split(';')
+        self.assertTrue(48 <= len(points) <= 51)
+        self.assertTrue(all(p.endswith(',2') for p in points))  # fixture's low is one copper
+        self.assertEqual(history_export.export(self.db,'forever/pvp/alliance/us',NOW).splitlines()[0].split('|')[-1],'0')
 
     def test_retention_only_removes_expired_managed_data(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]) as tmp:

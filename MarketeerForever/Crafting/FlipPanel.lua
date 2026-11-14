@@ -363,7 +363,7 @@ local function createPanel()
     local row=CreateFrame("Button",nil,panel,"BackdropTemplate");row:SetPoint("TOPLEFT",panel,"TOPLEFT",10,-145-(i-1)*34);row:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-32,-145-(i-1)*34);row:SetHeight(33);row:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});row:SetBackdropColor(i%2==0 and 0.10 or 0.075,0.10,0.11,0.95)
     row.name=makeText(row,nil,8,-4,245,"GameFontHighlightSmall");row.vendor=makeText(row,nil,8,-19,245,"GameFontDisableSmall")
     row.buy=makeText(row,nil,265,-11,95);row.ah=makeText(row,nil,370,-11,95);row.gain=makeText(row,nil,475,-11,95);row.gain:SetTextColor(0.45,0.9,0.64);row.stackGain=makeText(row,nil,580,-11,100);row.stackGain:SetTextColor(0.45,0.9,0.64);row.activity=makeText(row,nil,690,-11,90);row.listed=makeText(row,nil,790,-11,75);row.gap=makeText(row,nil,875,-11,90)
-    row:SetScript("OnClick",function(self) if self.item then setSelected(self.item) end end);rows[i]=row
+    row:SetScript("OnClick",function(self,button) if self.item then if (not button or button=="LeftButton") and IsAltKeyDown and IsAltKeyDown() and MarketeerForeverCore.ShowMarketHistory then MarketeerForeverCore.ShowMarketHistory(self.item.id) else setSelected(self.item) end end end);rows[i]=row
   end
   scrollbar=CreateFrame("Slider","MarketeerForeverCraftResultsScrollBar",panel,"UIPanelScrollBarTemplate")
   scrollbar:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-14,-161);scrollbar:SetSize(16,195)
