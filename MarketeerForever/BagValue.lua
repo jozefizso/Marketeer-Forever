@@ -127,13 +127,18 @@ end
 local function setupEllesmereButton()
   local bags=_G.EUI_Bags or _G.EUI_MainBagFrame
   if ellesmereButton or not bags or (InCombatLockdown and InCombatLockdown()) then return end
-  ellesmereButton=CreateFrame("Button",nil,bags,"BackdropTemplate");ellesmereButton:SetSize(24,24)
-  ellesmereButton:SetPoint("BOTTOMLEFT",bags,"BOTTOMLEFT",8,6);ellesmereButton:SetFrameLevel(bags:GetFrameLevel()+20)
+  ellesmereButton=CreateFrame("Button",nil,bags,"BackdropTemplate");ellesmereButton:SetSize(20,20)
+  local function position()
+    ellesmereButton:ClearAllPoints()
+    if bags.Footer then ellesmereButton:SetPoint("LEFT",bags.Footer,"LEFT",8,0)
+    else ellesmereButton:SetPoint("BOTTOMLEFT",bags,"BOTTOMLEFT",8,4) end
+  end
+  position();ellesmereButton:SetFrameLevel(bags:GetFrameLevel()+20)
   ellesmereButton:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});ellesmereButton:SetBackdropColor(.035,.08,.055,.95);ellesmereButton:SetBackdropBorderColor(.25,.65,.40,1)
-  local icon=ellesmereButton:CreateTexture(nil,"ARTWORK");icon:SetPoint("CENTER");icon:SetSize(18,18);icon:SetTexture("Interface\\MoneyFrame\\UI-GoldIcon")
+  local icon=ellesmereButton:CreateTexture(nil,"ARTWORK");icon:SetPoint("CENTER");icon:SetSize(16,16);icon:SetTexture("Interface\\MoneyFrame\\UI-GoldIcon")
   ellesmereButton:SetScript("OnClick",function() if core.OpenTradingMenu then core.OpenTradingMenu("bag") end end)
   ellesmereButton:SetScript("OnEnter",showValueTooltip);ellesmereButton:SetScript("OnLeave",function() GameTooltip:Hide() end)
-  bags:HookScript("OnShow",schedule)
+  bags:HookScript("OnShow",function() schedule();if C_Timer and C_Timer.After then C_Timer.After(0,position) else position() end end)
 end
 function core.UpdateBagCoinVisibility()
   if valueButton then valueButton:SetShown(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true) end

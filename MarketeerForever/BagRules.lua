@@ -66,7 +66,9 @@ local function paintEllesmere(root,depth)
   if not root or not root.GetChildren or (root.IsShown and not root:IsShown()) or depth>4 then return end
   for _,child in ipairs({root:GetChildren()}) do
     if child.IsShown and child:IsShown() then
-      if child.IsObjectType and child:IsObjectType("ItemButton") and child.GetID then
+      -- Ellesmere's skinned pooled buttons expose _textOverlay. Some clients
+      -- report their native object type as Button rather than ItemButton.
+      if child.GetID and child.GetParent and (child._textOverlay or (child.IsObjectType and child:IsObjectType("ItemButton"))) then
         local parent=child:GetParent();local bag=parent and parent.GetID and parent:GetID();local slot=child:GetID()
         local last=(Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag) or NUM_BAG_SLOTS or 4
         if type(bag)=="number" and bag>=0 and bag<=last and type(slot)=="number" and slot>0 then pcall(paint,child,bag,slot) end
