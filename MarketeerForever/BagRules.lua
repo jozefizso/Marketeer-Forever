@@ -2,7 +2,7 @@
 local core=MarketeerForeverCore
 local dots=setmetatable({},{__mode="k"})
 local pending,window,rows,status=false,nil,{},nil
-local defaults={{threshold=20,r=1,g=.82,b=.2},{threshold=0,r=.25,g=.85,b=.35}}
+local defaults={{threshold=15,r=1,g=0,b=0},{threshold=10,r=1,g=1,b=0},{threshold=-1,r=0,g=1,b=0}}
 local function rules()
   if not MarketeerForeverCoreDB then return {} end
   local db=MarketeerForeverCoreDB
