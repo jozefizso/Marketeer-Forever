@@ -10,7 +10,10 @@ local function label(parent,font,x,y,width)
   local t=parent:CreateFontString(nil,'OVERLAY',font);t:SetPoint('TOPLEFT',parent,'TOPLEFT',x,y);if width then t:SetWidth(width);t:SetJustifyH('LEFT') end;return t
 end
 local function button(parent,caption,x,y,w,action)
-  local b=CreateFrame('Button',nil,parent,'UIPanelButtonTemplate');b:SetSize(w,23);b:SetPoint('TOPLEFT',parent,'TOPLEFT',x,y);b:SetText(caption);b:SetScript('OnClick',action);return b
+  local b=CreateFrame('Button',nil,parent,'BackdropTemplate');b:SetSize(w,23);b:SetPoint('TOPLEFT',parent,'TOPLEFT',x,y)
+  b:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});b:SetBackdropColor(.055,.09,.075,1);b:SetBackdropBorderColor(.32,.36,.25,1)
+  local t=b:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall');t:SetPoint('CENTER');t:SetText(caption);b.caption=t
+  b:SetScript('OnEnter',function(self)self:SetBackdropBorderColor(.72,.59,.32,1)end);b:SetScript('OnLeave',function(self)self:SetBackdropBorderColor(.32,.36,.25,1)end);b:SetScript('OnClick',action);return b
 end
 local function dataFor(id)
   local d=_G.MarketeerForeverHistory;local market=core.Market()
@@ -33,7 +36,7 @@ end
 function core.CreateHistoryPanel(parent)
   local p=CreateFrame('Frame',nil,parent);p:SetAllPoints();p:Hide()
   label(p,'GameFontNormal',22,-115):SetText('MARKET HISTORY')
-  local hint=label(p,'GameFontHighlightSmall',22,-137,575);hint:SetText('Search by name, ID, or link; Alt+left-click a Market Vision item.')
+  local hint=label(p,'GameFontHighlightSmall',22,-137,575);hint:SetText('Type an item name, ID, or link. Alt+left-click an item to open it.')
   local input=CreateFrame('EditBox',nil,p,'InputBoxTemplate');input:SetSize(300,24);input:SetPoint('TOPLEFT',p,'TOPLEFT',30,-158);input:SetAutoFocus(false);input:SetMaxLetters(240)
   local name=label(p,'GameFontNormal',22,-194,570)
   local meta=label(p,'GameFontHighlightSmall',22,-215,580)
@@ -44,18 +47,24 @@ function core.CreateHistoryPanel(parent)
   local xleft=label(p,'GameFontHighlightSmall',110,-457,220);local xright=label(p,'GameFontHighlightSmall',420,-457,175);xright:SetJustifyH('RIGHT')
   local note=label(p,'GameFontHighlightSmall',22,-482,530);note:SetText('Hourly lowest buyouts. Gaps indicate missing data. Prices from AHledger (ahledger.com).')
   local range='all';local itemId;local lines={};local dots={};local displayed={};local graphStart,graphEnd
-  local results,resultsPage={},1
-  local resultPanel=CreateFrame('Frame',nil,p,'BackdropTemplate');resultPanel:SetPoint('TOPLEFT',p,'TOPLEFT',22,-270);resultPanel:SetSize(568,190);resultPanel:SetFrameLevel(p:GetFrameLevel()+8);resultPanel:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});resultPanel:SetBackdropColor(.025,.055,.045,.99);resultPanel:SetBackdropBorderColor(.24,.55,.36,1);resultPanel:Hide()
-  local resultRows={};local resultPageLabel=label(resultPanel,'GameFontHighlightSmall',225,-171,150)
+  local results,resultsPage,selectedResult={},1,1
+  local searchIndex,indexData,indexCatalog,indexMarket
+  local suppressSearch=false;local searchSerial=0;local renderedQuery
+  local resultPanel=CreateFrame('Frame',nil,p,'BackdropTemplate');resultPanel:SetPoint('TOPLEFT',input,'BOTTOMLEFT',-4,-3);resultPanel:SetSize(374,147);resultPanel:SetFrameLevel(p:GetFrameLevel()+20);resultPanel:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});resultPanel:SetBackdropColor(.025,.045,.038,1);resultPanel:SetBackdropBorderColor(.52,.45,.27,1);resultPanel:Hide()
+  local resultRows={};local resultPageLabel=label(resultPanel,'GameFontHighlightSmall',90,-125,275)
   local draw
   local function renderResults()
-    local maxPage=math.max(1,math.ceil(#results/6));resultsPage=math.max(1,math.min(maxPage,resultsPage))
-    for i,b in ipairs(resultRows) do local v=results[(resultsPage-1)*6+i];b.item=v;if v then b:SetText(v.name..'  (#'..v.id..')');b:Show() else b:Hide() end end
-    resultPageLabel:SetText('Page '..resultsPage..' / '..maxPage..'  |  '..#results..' matches')
+    local maxPage=math.max(1,math.ceil(#results/5));resultsPage=math.max(1,math.min(maxPage,resultsPage))
+    for i,b in ipairs(resultRows) do local index=(resultsPage-1)*5+i;local v=results[index];b.item=v;if v then b.caption:SetText(v.name);b.idText:SetText('#'..v.id);b:SetBackdropColor(index==selectedResult and .12 or .04,index==selectedResult and .19 or .07,index==selectedResult and .13 or .055,1);b:Show() else b:Hide() end end
+    resultPageLabel:SetText(#results==0 and 'No matching items with history' or (#results..' matches  |  '..resultsPage..' / '..maxPage))
   end
-  for i=1,6 do local b=button(resultPanel,'',5,-3-(i-1)*26,558,function(self)if self.item then itemId=self.item.id;input:SetText(tostring(itemId));resultPanel:Hide();draw() end end);resultRows[i]=b end
-  button(resultPanel,'Previous',5,-163,82,function()resultsPage=resultsPage-1;renderResults()end)
-  button(resultPanel,'Next',93,-163,82,function()resultsPage=resultsPage+1;renderResults()end)
+  local function choose(v)
+    if not v then return end
+    searchSerial=searchSerial+1;itemId=v.id;suppressSearch=true;input:SetText(v.name or tostring(v.id));suppressSearch=false;input:ClearFocus();resultPanel:Hide();draw()
+  end
+  for i=1,5 do local b=button(resultPanel,'',4,-4-(i-1)*23,366,function(self)choose(self.item)end);b.caption:ClearAllPoints();b.caption:SetPoint('LEFT',b,'LEFT',9,0);b.caption:SetWidth(275);b.caption:SetJustifyH('LEFT');b.idText=b:CreateFontString(nil,'OVERLAY','GameFontDisableSmall');b.idText:SetPoint('RIGHT',b,'RIGHT',-8,0);resultRows[i]=b end
+  button(resultPanel,'<',5,-121,35,function()resultsPage=math.max(1,resultsPage-1);selectedResult=(resultsPage-1)*5+1;renderResults()end)
+  button(resultPanel,'>',43,-121,35,function()resultsPage=math.min(math.max(1,math.ceil(#results/5)),resultsPage+1);selectedResult=(resultsPage-1)*5+1;renderResults()end)
   local function clearGraph()
     for _,line in pairs(lines) do line:Hide() end;for _,dot in ipairs(dots) do dot:Hide() end
     displayed={};ytop:SetText('');ymid:SetText('');ybottom:SetText('');xleft:SetText('');xright:SetText('')
@@ -92,25 +101,45 @@ function core.CreateHistoryPanel(parent)
     note:SetText(d.schemaVersion==1 and 'Hourly lows; older data uses daily medians. Update for full history.' or 'Hourly lowest buyouts. Gaps indicate missing data. Prices from AHledger (ahledger.com).')
     status:SetText(#displayed==1 and 'One observation available.' or '')
   end
+  local function buildIndex()
+    local d,c,market=_G.MarketeerForeverHistory,_G.MarketeerForeverItemNames,core.Market()
+    if searchIndex and indexData==d and indexCatalog==c and indexMarket==market then return searchIndex end
+    searchIndex={};indexData,indexCatalog,indexMarket=d,c,market
+    if type(d)=='table' and d.market==market and type(d.items)=='table' then
+      for candidate in pairs(d.items) do local itemName=itemNameFor(candidate);if itemName then searchIndex[#searchIndex+1]={id=candidate,name=itemName,lower=itemName:lower()} end end
+    end
+    table.sort(searchIndex,function(a,b)if a.lower==b.lower then return a.id<b.id end;return a.lower<b.lower end)
+    return searchIndex
+  end
+  local function updateResults()
+    local raw=input:GetText() or '';local query=raw:match('^%s*(.-)%s*$'):lower();renderedQuery=raw
+    if #query<2 or query:match('^%d+$') or query:find('item:',1,true) then resultPanel:Hide();return end
+    local prefix,other={},{}
+    for _,v in ipairs(buildIndex()) do local at=v.lower:find(query,1,true);if at==1 then prefix[#prefix+1]=v elseif at then other[#other+1]=v end end
+    results=prefix;for _,v in ipairs(other) do results[#results+1]=v end
+    resultsPage=1;selectedResult=1;renderResults();resultPanel:Show()
+  end
   local function search()
     local raw=input:GetText() or '';local id=tonumber(raw:match('item:(%d+)') or raw:match('^%s*(%d+)%s*$'))
-    input:ClearFocus()
-    if not id then
-      local query=raw:match('^%s*(.-)%s*$'):lower();local d=_G.MarketeerForeverHistory;local market=core.Market();results={}
-      if query~='' and type(d)=='table' and d.market==market and type(d.items)=='table' then
-        for candidate in pairs(d.items) do
-          local itemName=itemNameFor(candidate)
-          if itemName and itemName:lower():find(query,1,true) then results[#results+1]={id=candidate,name=itemName} end
-        end
-      end
-      table.sort(results,function(a,b)local x,y=a.name:lower(),b.name:lower();if x==y then return a.id<b.id end;return x<y end)
-      if #results>1 then resultsPage=1;renderResults();resultPanel:Show();status:SetText('Select an item from the results.');return end
-      id=results[1] and results[1].id
+    if id and id>0 then choose({id=id,name=itemNameFor(id)})
+    else
+      if not resultPanel:IsShown() or renderedQuery~=raw then updateResults() end
+      if results[1] and resultPanel:IsShown() then choose(results[selectedResult] or results[1]) else status:SetText('No matching item. Try another name, item ID, or item link.') end
     end
-    resultPanel:Hide();if not id or id<1 then status:SetText('Item not found. Try a different name, item ID, or item link.');return end
-    itemId=id;input:SetText(tostring(id));draw()
   end
-  input:SetScript('OnEnterPressed',search);input:SetScript('OnEscapePressed',function(s)s:ClearFocus()end);button(p,'Search',346,-158,75,search)
+  input:SetScript('OnTextChanged',function(_,userInput)
+    if suppressSearch or not userInput then return end
+    searchSerial=searchSerial+1;local serial=searchSerial
+    if C_Timer and C_Timer.After then C_Timer.After(.15,function()if serial==searchSerial and p:IsShown() then updateResults() end end) else updateResults() end
+  end)
+  input:SetScript('OnEnterPressed',search)
+  input:SetScript('OnEscapePressed',function(s)searchSerial=searchSerial+1;resultPanel:Hide();s:ClearFocus()end)
+  input:SetScript('OnArrowPressed',function(_,key)
+    if not resultPanel:IsShown() or #results==0 then return end
+    if key=='DOWN' then selectedResult=math.min(#results,selectedResult+1) elseif key=='UP' then selectedResult=math.max(1,selectedResult-1) else return end
+    resultsPage=math.ceil(selectedResult/5);renderResults()
+  end)
+  button(p,'Search',346,-158,75,search)
   local options={{'All','all'},{'24h','24h'},{'48h','48h'},{'7d','7d'},{'14d','14d'}}
   local buttons={};local function selectRange(value)range=value;for _,b in ipairs(buttons) do b:SetAlpha(b.range==range and 1 or .65) end;draw() end
   for i,opt in ipairs(options) do local b=button(p,opt[1],22+(i-1)*82,-241,75,function()selectRange(opt[2])end);b.range=opt[2];buttons[i]=b end
@@ -122,7 +151,7 @@ function core.CreateHistoryPanel(parent)
   end
   chart:SetScript('OnEnter',function(self)self.hovered=true;hover()end);chart:SetScript('OnLeave',function(self)self.hovered=false;if GameTooltip then GameTooltip:Hide() end end)
   chart:SetScript('OnUpdate',function(self,delta)if self.hovered then self.elapsed=(self.elapsed or 0)+delta;if self.elapsed>=.1 then self.elapsed=0;hover() end end end)
-  function p:SetItem(id) itemId=tonumber(id);if itemId then resultPanel:Hide();input:SetText(tostring(itemId));selectRange('all') end end
+  function p:SetItem(id) itemId=tonumber(id);if itemId then searchSerial=searchSerial+1;resultPanel:Hide();suppressSearch=true;input:SetText(itemNameFor(itemId) or tostring(itemId));suppressSearch=false;selectRange('all') end end
   function p:Refresh() if itemId then draw() end end
   p:RegisterEvent('GET_ITEM_INFO_RECEIVED');p:SetScript('OnEvent',function(_,_,id,success)if success and id==itemId and p:IsShown() then draw() end end)
   selectRange('all');return p

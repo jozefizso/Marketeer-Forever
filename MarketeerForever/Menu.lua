@@ -4,7 +4,9 @@ local function text(parent,template,x,y,width)
   local f=parent:CreateFontString(nil,'OVERLAY',template);f:SetPoint('TOPLEFT',x,y);if width then f:SetWidth(width);f:SetJustifyH('LEFT') end;return f
 end
 local function button(parent,label,x,y,w,action)
-  local b=CreateFrame('Button',nil,parent,'UIPanelButtonTemplate');b:SetSize(w,26);b:SetPoint('TOPLEFT',x,y);b:SetText(label);b:SetScript('OnClick',action);return b
+  local b=CreateFrame('Button',nil,parent,'BackdropTemplate');b:SetSize(w,26);b:SetPoint('TOPLEFT',x,y);b:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});b:SetBackdropColor(.055,.09,.075,1);b:SetBackdropBorderColor(.34,.36,.26,1)
+  local t=b:CreateFontString(nil,'OVERLAY','GameFontNormal');t:SetPoint('CENTER');t:SetText(label)
+  b:SetScript('OnEnter',function(self)self:SetBackdropBorderColor(.75,.61,.32,1)end);b:SetScript('OnLeave',function(self)self:SetBackdropBorderColor(.34,.36,.26,1)end);b:SetScript('OnClick',action);return b
 end
 local function build()
   if frame then return end
@@ -17,10 +19,11 @@ local function build()
   local function applyScale(value) value=math.max(.65,math.min(maxScale(),tonumber(value) or 1));frame:SetScale(value);if MarketeerForeverCoreDB then MarketeerForeverCoreDB.menuScale=value end end
   applyScale(MarketeerForeverCoreDB and MarketeerForeverCoreDB.menuScale)
   frame:SetScript('OnDragStart',function(s)s:StartMoving()end);frame:SetScript('OnDragStop',function(s)s:StopMovingOrSizing()end)
-  frame:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});frame:SetBackdropColor(.025,.045,.038,.98);frame:SetBackdropBorderColor(.20,.43,.29,1)
+  frame:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});frame:SetBackdropColor(.025,.045,.038,.98);frame:SetBackdropBorderColor(.49,.42,.25,1)
+  local accent=frame:CreateTexture(nil,'ARTWORK');accent:SetColorTexture(.65,.52,.25,1);accent:SetPoint('TOPLEFT',frame,'TOPLEFT',22,-57);accent:SetSize(586,1)
   text(frame,'GameFontNormalLarge',22,-20):SetText('MARKETEER')
   local close=button(frame,'X',585,-14,28,function()frame:Hide()end);close:ClearAllPoints();close:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-15,-14);close:SetFrameLevel(frame:GetFrameLevel()+10)
-  local resize=CreateFrame('Button',nil,frame,'UIPanelButtonTemplate');resize:SetSize(62,20);resize:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',-6,6);resize:SetText('Resize')
+  local resize=button(frame,'Resize',0,0,62,function()end);resize:ClearAllPoints();resize:SetSize(62,20);resize:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',-6,6)
   resize:SetScript('OnMouseDown',function(self,mouseButton)if mouseButton~='LeftButton' then return end;self.startX,self.startY=GetCursorPosition();self.startScale=frame:GetScale();self.resizing=true end)
   resize:SetScript('OnMouseUp',function(self)self.resizing=false end)
   resize:SetScript('OnHide',function(self)self.resizing=false end)
