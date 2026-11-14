@@ -247,15 +247,23 @@ local function createPanel()
   panel=CreateFrame("Frame",nil,AuctionHouseFrame,"BackdropTemplate");panel:Hide();panel:SetPoint("TOPLEFT",AuctionHouseFrame,"TOPLEFT",12,-75);panel:SetPoint("BOTTOMRIGHT",AuctionHouseFrame,"BOTTOMRIGHT",-12,35);panel:SetFrameStrata("DIALOG");panel:SetFrameLevel(AuctionHouseFrame:GetFrameLevel()+50);panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});panel:SetBackdropColor(.055,.065,.07,1);panel:SetBackdropBorderColor(.24,.30,.28,1)
   local previousWidth,previousHeight
   panel:SetScript("OnShow",function() if not previousWidth then previousWidth,previousHeight=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(previousWidth+220,previousHeight+180) end end)
-  panel:SetScript("OnHide",function() if StaticPopup_Hide then StaticPopup_Hide("MARKETEER_CONFIRM_CANCEL_AUCTION") end;if previousWidth and previousHeight then AuctionHouseFrame:SetSize(previousWidth,previousHeight) end;previousWidth=nil;previousHeight=nil end)
-  StaticPopupDialogs["MARKETEER_CONFIRM_CANCEL_AUCTION"]={text="Cancel the auction for %s?",button1="Cancel auction",button2="Keep auction",timeout=0,whileDead=true,hideOnEscape=true,OnAccept=function(_,id)
+  local confirm=CreateFrame("Frame","MarketeerForeverCancelConfirmation",UIParent,"BackdropTemplate")
+  confirm:SetSize(320,105);confirm:SetPoint("CENTER");confirm:SetFrameStrata("FULLSCREEN_DIALOG");confirm:SetClampedToScreen(true)
+  confirm:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});confirm:SetBackdropColor(.055,.065,.07,.98);confirm:SetBackdropBorderColor(.3,.5,.38,1)
+  local question=confirm:CreateFontString(nil,"OVERLAY","GameFontHighlight");question:SetPoint("TOPLEFT",confirm,"TOPLEFT",16,-16);question:SetPoint("TOPRIGHT",confirm,"TOPRIGHT",-16,-16);question:SetJustifyH("CENTER")
+  local accept=CreateFrame("Button",nil,confirm,"UIPanelButtonTemplate");accept:SetSize(130,24);accept:SetPoint("BOTTOMLEFT",confirm,"BOTTOMLEFT",20,14);accept:SetText("Cancel auction")
+  local keep=CreateFrame("Button",nil,confirm,"UIPanelButtonTemplate");keep:SetSize(130,24);keep:SetPoint("BOTTOMRIGHT",confirm,"BOTTOMRIGHT",-20,14);keep:SetText("Keep auction");keep:SetScript("OnClick",function() confirm:Hide() end)
+  core.RegisterEscapeFrame("MarketeerForeverCancelConfirmation");confirm:Hide()
+  panel:SetScript("OnHide",function() confirm:Hide();if previousWidth and previousHeight then AuctionHouseFrame:SetSize(previousWidth,previousHeight) end;previousWidth=nil;previousHeight=nil end)
+  accept:SetScript("OnClick",function()
+    local id=confirm.auctionID;confirm:Hide()
     if not core.active or state.cancelPending or not C_AuctionHouse or not C_AuctionHouse.CancelAuction then return end
     local found=false;for _,auction in ipairs(owned) do if auction.auctionID==id then found=true;break end end
     if not found then print("Marketeer: that auction is no longer available.");return end
     if C_AuctionHouse.CanCancelAuction and not C_AuctionHouse.CanCancelAuction(id) then print("Marketeer: this auction cannot be cancelled.");return end
     local ok,err=pcall(C_AuctionHouse.CancelAuction,id)
     if ok then state.cancelPending=id;state.cancelStarted=(GetServerTime and GetServerTime()) or time();state.needOwned=true;state.ownedRequested=nil;render() else print("Marketeer: cancel failed: "..tostring(err)) end
-  end}
+  end)
   local title=panel:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",panel,"TOPLEFT",16,-12);title:SetText("YOUR AUCTIONS")
   local scan=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");scan:SetSize(120,24);scan:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-20,-8);scan:SetText("Scan market");scan:SetScript("OnClick",function() local ok,err=core.Scan();if not ok then print("Marketeer: "..tostring(err)) end end)
   selectAll=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");selectAll:SetSize(85,24);selectAll:SetPoint("TOPLEFT",panel,"TOPLEFT",230,-8);selectAll:SetText("Select all")
@@ -299,7 +307,7 @@ local function createPanel()
     row.cancel=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.cancel:SetSize(54,22);row.cancel:SetPoint("TOPRIGHT",row,"TOPRIGHT",-4,-4);row.cancel:SetText("Cancel");row.cancel:SetScript("OnClick",function()
       local item=row.item
       if not item or state.cancelPending or not core.active or not C_AuctionHouse.CancelAuction then return end
-      StaticPopup_Show("MARKETEER_CONFIRM_CANCEL_AUCTION",itemName(item),nil,item.auctionID)
+      confirm.auctionID=item.auctionID;question:SetText("Cancel the auction for "..itemName(item).."?");confirm:Show()
     end)
     rows[i]=row
   end

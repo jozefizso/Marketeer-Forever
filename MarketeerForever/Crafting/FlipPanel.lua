@@ -404,29 +404,27 @@ local function createPanel()
     professionButton:SetText(name or "All professions")
     scrollOffset=0;calculate()
   end
-  local professionMenu
-  if UIDropDownMenu_Initialize and UIDropDownMenu_CreateInfo and UIDropDownMenu_AddButton and ToggleDropDownMenu then
-    professionMenu=CreateFrame("Frame","MarketeerForeverCraftProfessionMenu",panel,"UIDropDownMenuTemplate")
-    UIDropDownMenu_Initialize(professionMenu,function()
-      local info=UIDropDownMenu_CreateInfo();info.text="All professions";info.checked=not MarketeerForeverCraftDB.craftProfession;info.func=function() chooseProfession(nil) end;UIDropDownMenu_AddButton(info)
-      for _,name in ipairs(professions()) do
-        local value=name
-        local option=UIDropDownMenu_CreateInfo();option.text=value;option.checked=MarketeerForeverCraftDB.craftProfession==value;option.func=function() chooseProfession(value) end;UIDropDownMenu_AddButton(option)
-      end
-    end,"MENU")
-  end
+  local professionMenu=CreateFrame("Frame",nil,panel,"BackdropTemplate")
+  professionMenu:SetWidth(160);professionMenu:SetPoint("TOPLEFT",professionButton,"BOTTOMLEFT",0,-1);professionMenu:SetFrameLevel(panel:GetFrameLevel()+30)
+  professionMenu:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});professionMenu:SetBackdropColor(.04,.06,.05,1);professionMenu:SetBackdropBorderColor(.3,.5,.38,1);professionMenu:Hide()
+  local professionRows={}
   professionButton:SetScript("OnClick",function()
-    if professionMenu then ToggleDropDownMenu(1,nil,professionMenu,professionButton,0,0)
-    else
-      local list=professions();local current=0
-      for i,name in ipairs(list) do if name==MarketeerForeverCraftDB.craftProfession then current=i;break end end
-      chooseProfession(list[current+1])
+    if professionMenu:IsShown() then professionMenu:Hide();return end
+    local list=professions();table.insert(list,1,"All professions")
+    for i,name in ipairs(list) do
+      local row=professionRows[i]
+      if not row then row=CreateFrame("Button",nil,professionMenu,"UIPanelButtonTemplate");row:SetSize(156,23);row:SetPoint("TOPLEFT",professionMenu,"TOPLEFT",2,-2-(i-1)*23);professionRows[i]=row end
+      row:SetText(name);if i==1 then row.profession=nil else row.profession=name end
+      row:SetScript("OnClick",function(self) chooseProfession(self.profession);professionMenu:Hide() end);row:Show()
     end
+    for i=#list+1,#professionRows do professionRows[i]:Hide() end
+    professionMenu:SetHeight(#list*23+4);professionMenu:Show()
   end)
   professionButton:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_TOP");GameTooltip:SetText("Filter recipes by profession");GameTooltip:Show() end end)
   professionButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
   local applyButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");applyButton:SetSize(110,22);applyButton:SetPoint("TOPLEFT",panel,"TOPLEFT",470,-77);applyButton:SetText("Apply / Search");applyButton:SetScript("OnClick",function() scrollOffset=0;calculate() end)
   applyMode=function()
+    professionMenu:Hide()
     local lookup=viewMode=="lookup";local craft=viewMode=="craft"
     for _,control in ipairs(flipControls) do control:SetShown(not lookup) end
     knownButton:SetShown(craft);captureButton:SetShown(craft);professionButton:SetShown(craft);searchHint:SetShown(not craft)

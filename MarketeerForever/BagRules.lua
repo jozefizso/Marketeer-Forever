@@ -201,22 +201,21 @@ local function buildWindow()
     local label=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");label:SetPoint("TOPLEFT",20,y-5);label:SetText("AH difference greater than")
     row.threshold=CreateFrame("EditBox",nil,window,"InputBoxTemplate");row.threshold:SetSize(55,24);row.threshold:SetPoint("TOPLEFT",170,y);row.threshold:SetAutoFocus(false);row.threshold:SetMaxLetters(8)
     local suffix=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");suffix:SetPoint("TOPLEFT",230,y-5);suffix:SetText("% of AH")
-    row.method=CreateFrame("Frame",nil,window,"UIDropDownMenuTemplate");row.method:SetPoint("TOPLEFT",270,y+4);UIDropDownMenu_SetWidth(row.method,75)
-    UIDropDownMenu_Initialize(row.method,function()
-      for _,choice in ipairs({{"AH","auction"},{"Vendor","vendor"}}) do
-        local label,value=choice[1],choice[2]
-        local info=UIDropDownMenu_CreateInfo();info.text=label;info.checked=row.saleMethod==value
-        info.func=function() row.saleMethod=value;UIDropDownMenu_SetText(row.method,label) end
-        UIDropDownMenu_AddButton(info)
-      end
-    end)
+    row.method=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");row.method:SetSize(90,24);row.method:SetPoint("TOPLEFT",270,y)
+    local menu=CreateFrame("Frame",nil,window,"BackdropTemplate");menu:SetSize(92,52);menu:SetPoint("TOPLEFT",row.method,"BOTTOMLEFT",0,-1);menu:SetFrameLevel(window:GetFrameLevel()+20);menu:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});menu:SetBackdropColor(.04,.06,.05,1);menu:SetBackdropBorderColor(.3,.5,.38,1);menu:Hide();row.methodMenu=menu
+    for index,choice in ipairs({{"AH","auction"},{"Vendor","vendor"}}) do
+      local label,value=choice[1],choice[2]
+      local option=CreateFrame("Button",nil,menu,"UIPanelButtonTemplate");option:SetSize(88,24);option:SetPoint("TOPLEFT",menu,"TOPLEFT",2,-2-(index-1)*24);option:SetText(label)
+      option:SetScript("OnClick",function() row.saleMethod=value;row.method:SetText(label.."  v");menu:Hide() end)
+    end
+    row.method:SetScript("OnClick",function() local show=not menu:IsShown();for _,other in ipairs(rows) do if other.methodMenu then other.methodMenu:Hide() end end;menu:SetShown(show) end)
     row.color=CreateFrame("Button",nil,window,"BackdropTemplate");row.color:SetSize(27,24);row.color:SetPoint("TOPLEFT",375,y);row.color:SetBackdrop({edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});row.color:SetBackdropBorderColor(.8,.8,.8,1)
     row.swatch=row.color:CreateTexture(nil,"ARTWORK");row.swatch:SetPoint("TOPLEFT",2,-2);row.swatch:SetPoint("BOTTOMRIGHT",-2,2)
     row.color:SetScript("OnClick",function() chooseColor(row) end)
     row.remove=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");row.remove:SetSize(80,24);row.remove:SetPoint("TOPLEFT",425,y);row.remove:SetText("Remove")
     row.remove:SetScript("OnClick",function()
-      for n=i,5 do local nextRow=rows[n+1];local dest=rows[n];dest.threshold:SetText(nextRow.threshold:GetText());dest.r,dest.g,dest.b=nextRow.r,nextRow.g,nextRow.b;dest.saleMethod=nextRow.saleMethod;UIDropDownMenu_SetText(dest.method,dest.saleMethod=="auction" and "AH" or "Vendor");dest.swatch:SetColorTexture(dest.r,dest.g,dest.b,1) end
-      local last=rows[6];last.threshold:SetText("");last.r,last.g,last.b=1,1,1;last.saleMethod="vendor";UIDropDownMenu_SetText(last.method,"Vendor");last.swatch:SetColorTexture(1,1,1,1)
+      for n=i,5 do local nextRow=rows[n+1];local dest=rows[n];dest.threshold:SetText(nextRow.threshold:GetText());dest.r,dest.g,dest.b=nextRow.r,nextRow.g,nextRow.b;dest.saleMethod=nextRow.saleMethod;dest.method:SetText((dest.saleMethod=="auction" and "AH" or "Vendor").."  v");dest.methodMenu:Hide();dest.swatch:SetColorTexture(dest.r,dest.g,dest.b,1) end
+      local last=rows[6];last.threshold:SetText("");last.r,last.g,last.b=1,1,1;last.saleMethod="vendor";last.method:SetText("Vendor  v");last.methodMenu:Hide();last.swatch:SetColorTexture(1,1,1,1)
     end)
   end
   status=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");status:SetPoint("BOTTOMLEFT",20,49);status:SetWidth(490);status:SetJustifyH("LEFT")
@@ -242,7 +241,7 @@ local function buildWindow()
   local close=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");close:SetSize(90,25);close:SetPoint("BOTTOMRIGHT",-22,14);close:SetText("Close");close:SetScript("OnClick",function() window:Hide() end)
   window:SetScript("OnShow",function()
     local saved=rules()
-    for i,row in ipairs(rows) do local rule=saved[i];row.threshold:SetText(rule and tostring(rule.threshold) or "");row.r,row.g,row.b=rule and rule.r or 1,rule and rule.g or 1,rule and rule.b or 1;row.saleMethod=rule and ruleMethod(rule) or "vendor";UIDropDownMenu_SetText(row.method,row.saleMethod=="auction" and "AH" or "Vendor");row.swatch:SetColorTexture(row.r,row.g,row.b,1) end
+    for i,row in ipairs(rows) do local rule=saved[i];row.threshold:SetText(rule and tostring(rule.threshold) or "");row.r,row.g,row.b=rule and rule.r or 1,rule and rule.g or 1,rule and rule.b or 1;row.saleMethod=rule and ruleMethod(rule) or "vendor";row.method:SetText((row.saleMethod=="auction" and "AH" or "Vendor").."  v");row.methodMenu:Hide();row.swatch:SetColorTexture(row.r,row.g,row.b,1) end
     status:SetText("Each rule chooses AH or vendor for bag value. AH cut, binding and deposits are not included.")
   end)
   window:Hide()
