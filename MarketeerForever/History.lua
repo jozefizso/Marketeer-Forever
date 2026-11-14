@@ -41,6 +41,7 @@ function core.CreateHistoryPanel(parent)
   local name=label(p,'GameFontNormal',22,-194,570)
   local meta=label(p,'GameFontHighlightSmall',22,-215,580)
   local chart=CreateFrame('Frame',nil,p,'BackdropTemplate');chart:SetPoint('TOPLEFT',p,'TOPLEFT',110,-276);chart:SetSize(480,175);chart:EnableMouse(true)
+  local hoverAnchor=CreateFrame('Frame',nil,chart);hoverAnchor:SetSize(1,1)
   chart:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});chart:SetBackdropColor(.03,.055,.05,.96);chart:SetBackdropBorderColor(.24,.38,.31,1)
   local status=label(p,'GameFontHighlightSmall',115,-345,465);status:SetText('Choose an item to see its market history.')
   local ytop=label(p,'GameFontHighlightSmall',22,-270,84);local ymid=label(p,'GameFontHighlightSmall',22,-353,84);local ybottom=label(p,'GameFontHighlightSmall',22,-438,84)
@@ -90,7 +91,7 @@ function core.CreateHistoryPanel(parent)
     if not chart.CreateLine then status:SetText('Line graphs are unavailable in this client.');return end
     local w,h=480,175;local previous
     for i,v in ipairs(displayed) do
-      local x=(v.time-graphStart)/(graphEnd-graphStart)*(w-8)+4;local y=(v.price-minY)/(maxY-minY)*(h-8)+4;v.x=x
+      local x=(v.time-graphStart)/(graphEnd-graphStart)*(w-8)+4;local y=(v.price-minY)/(maxY-minY)*(h-8)+4;v.x=x;v.y=y
       local dot=dots[i] or chart:CreateTexture(nil,'OVERLAY');dots[i]=dot;dot:SetColorTexture(.35,.95,.65,1);dot:SetSize(4,4);dot:ClearAllPoints();dot:SetPoint('CENTER',chart,'BOTTOMLEFT',x,y);dot:Show()
       if previous then
         local old=(d.generatedAt-v.time)>48*3600;local oldPrev=(d.generatedAt-previous.time)>48*3600;local maxGap=(d.schemaVersion==1 and (old or oldPrev)) and 36*3600 or 3*3600
@@ -147,7 +148,7 @@ function core.CreateHistoryPanel(parent)
     if #displayed==0 or not chart.GetLeft or not GetCursorPosition then return end
     local left=chart:GetLeft();if not left then return end;local x=GetCursorPosition();local scale=chart:GetEffectiveScale() or 1;x=x/scale-left
     local best,dist;for _,v in ipairs(displayed) do local delta=math.abs((v.x or 0)-x);if not dist or delta<dist then best,dist=v,delta end end
-    if best and GameTooltip then local d=_G.MarketeerForeverHistory;GameTooltip:SetOwner(chart,'ANCHOR_TOP');GameTooltip:SetText(date('%b %d %H:%M',best.time));GameTooltip:AddLine(money(best.price)..(d and d.schemaVersion==1 and best.age>48 and ' (daily median low)' or ' (hourly low)'),1,1,1);GameTooltip:Show() end
+    if best and GameTooltip then local d=_G.MarketeerForeverHistory;hoverAnchor:ClearAllPoints();hoverAnchor:SetPoint('CENTER',chart,'BOTTOMLEFT',best.x,best.y);GameTooltip:SetOwner(hoverAnchor,'ANCHOR_TOP');GameTooltip:SetText(date('%b %d %H:%M',best.time));GameTooltip:AddLine(money(best.price)..(d and d.schemaVersion==1 and best.age>48 and ' (daily median low)' or ' (hourly low)'),1,1,1);GameTooltip:Show() end
   end
   chart:SetScript('OnEnter',function(self)self.hovered=true;hover()end);chart:SetScript('OnLeave',function(self)self.hovered=false;if GameTooltip then GameTooltip:Hide() end end)
   chart:SetScript('OnUpdate',function(self,delta)if self.hovered then self.elapsed=(self.elapsed or 0)+delta;if self.elapsed>=.1 then self.elapsed=0;hover() end end end)
