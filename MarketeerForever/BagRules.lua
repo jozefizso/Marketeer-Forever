@@ -2,6 +2,10 @@
 local core=MarketeerForeverCore
 local dots=setmetatable({},{__mode="k"})
 local pending,window,rows,status=false,nil,{},nil
+local auctionOpen,merchantOpen=false,false
+local function markersVisible()
+  return not (MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagMarkersTradingOnly) or auctionOpen or merchantOpen
+end
 local defaults={{threshold=15,r=1,g=0,b=0},{threshold=10,r=1,g=1,b=0},{threshold=-1,r=0,g=1,b=0}}
 local function ruleMethod(rule)
   if rule.method=="auction" or rule.method=="vendor" then return rule.method end
@@ -73,6 +77,7 @@ function core.BagRuleValue(item)
 end
 local function paint(button,bag,slot)
   local dot=dots[button]
+  if not markersVisible() then if dot then dot:Hide() end;return end
   -- A texture is cosmetic: creating it does not create a protected item
   -- button or change its actions. Bag slots may first appear during combat.
   if not dot then
@@ -137,6 +142,10 @@ end
 local function refresh()
   pending=false
   for _,dot in pairs(dots) do dot:Hide() end
+  if not markersVisible() then
+    if Baganator and Baganator.API and Baganator.API.RequestItemButtonsRefresh then Baganator.API.RequestItemButtonsRefresh() end
+    return
+  end
   for i=1,(NUM_CONTAINER_FRAMES or 13) do
     local frame=_G["ContainerFrame"..i]
     if frame and frame.IsShown and frame:IsShown() then pcall(paintFrame,frame) end
@@ -171,6 +180,7 @@ local function setupBaganator()
   if not Baganator or not Baganator.API or not Baganator.API.RegisterCornerWidget then return end
   if baganatorRegistered then hookBaganatorViews();return end
   Baganator.API.RegisterCornerWidget("Marketeer selling rules","marketeer_selling_rules",function(texture,details)
+    if not markersVisible() then return false end
     if type(details)~="table" then return false end
     local link=details.itemLink;local id=details.itemID or (type(link)=="string" and tonumber(link:match("item:(%d+)")))
     if type(id)~="number" then return false end
@@ -229,6 +239,9 @@ local function buildWindow()
   window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,.98);window:SetBackdropBorderColor(.35,.42,.37,1)
   local title=window:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",16,-16);title:SetText("BAG SELLING RULES")
   local note=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",16,-43);note:SetPoint("TOPRIGHT",-16,-43);note:SetJustifyH("LEFT");note:SetText("AH premium is the AH price minus vendor value, divided by the AH price. Example: AH 1g, vendor 50s = 50%. The highest matching rule wins.")
+  local tradingOnly=CreateFrame("CheckButton",nil,window,"UICheckButtonTemplate");tradingOnly:SetSize(24,24);tradingOnly:SetPoint("TOPLEFT",16,-77)
+  local tradingLabel=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");tradingLabel:SetPoint("LEFT",tradingOnly,"RIGHT",2,0);tradingLabel:SetText("Only show dots at the auction house or a vendor")
+  tradingOnly:SetScript("OnClick",function(self) MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.bagMarkersTradingOnly=self:GetChecked() and true or false;schedule() end)
   for i=1,6 do
     local row={};rows[i]=row
     local y=-110-(i-1)*39
@@ -243,6 +256,8 @@ local function buildWindow()
       option:SetScript("OnClick",function() row.saleMethod=value;row.method:SetText(label.."  v");menu:Hide() end)
     end
     row.method:SetScript("OnClick",function() local show=not menu:IsShown();for _,other in ipairs(rows) do if other.methodMenu then other.methodMenu:Hide() end end;menu:SetShown(show) end)
+    row.method:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_TOP");GameTooltip:SetText("Bag value estimate");GameTooltip:AddLine("Choose whether items matching this rule use their AH price or vendor sell price in the estimated bag value. This does not sell items or change their dot color.",1,1,1,true);GameTooltip:Show() end end)
+    row.method:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
     row.color=CreateFrame("Button",nil,window,"BackdropTemplate");row.color:SetSize(27,24);row.color:SetPoint("TOPLEFT",375,y);row.color:SetBackdrop({edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});row.color:SetBackdropBorderColor(.8,.8,.8,1)
     row.swatch=row.color:CreateTexture(nil,"ARTWORK");row.swatch:SetPoint("TOPLEFT",2,-2);row.swatch:SetPoint("BOTTOMRIGHT",-2,2)
     row.color:SetScript("OnClick",function() chooseColor(row) end)
@@ -275,6 +290,7 @@ local function buildWindow()
   local close=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");close:SetSize(90,25);close:SetPoint("BOTTOMRIGHT",-22,14);close:SetText("Close");close:SetScript("OnClick",function() window:Hide() end)
   window:SetScript("OnShow",function()
     local saved=rules()
+    tradingOnly:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagMarkersTradingOnly==true)
     for i,row in ipairs(rows) do local rule=saved[i];row.threshold:SetText(rule and tostring(rule.threshold) or "");row.r,row.g,row.b=rule and rule.r or 1,rule and rule.g or 1,rule and rule.b or 1;row.saleMethod=rule and ruleMethod(rule) or "vendor";row.method:SetText((row.saleMethod=="auction" and "AH" or "Vendor").."  v");row.methodMenu:Hide();row.swatch:SetColorTexture(row.r,row.g,row.b,1) end
     status:SetText("Each rule chooses AH or vendor for bag value. AH cut, binding and deposits are not included.")
   end)
@@ -285,6 +301,15 @@ function core.ToggleBagRules()
   if window:IsShown() then window:Hide() else window:Show() end
 end
 local events=CreateFrame("Frame")
-for _,event in ipairs({"PLAYER_LOGIN","ADDON_LOADED","BAG_UPDATE_DELAYED","GET_ITEM_INFO_RECEIVED","PLAYER_REGEN_ENABLED"}) do events:RegisterEvent(event) end
-events:SetScript("OnEvent",function(_,event) if event=="PLAYER_LOGIN" or event=="ADDON_LOADED" then hookFrames();setupBaganator() end;schedule() end)
+for _,event in ipairs({"PLAYER_LOGIN","ADDON_LOADED","BAG_UPDATE_DELAYED","GET_ITEM_INFO_RECEIVED","PLAYER_REGEN_ENABLED","AUCTION_HOUSE_SHOW","AUCTION_HOUSE_CLOSED","MERCHANT_SHOW","MERCHANT_CLOSED"}) do events:RegisterEvent(event) end
+events:SetScript("OnEvent",function(_,event)
+  if event=="PLAYER_LOGIN" or event=="ADDON_LOADED" then
+    hookFrames();setupBaganator()
+    if event=="PLAYER_LOGIN" then auctionOpen=AuctionHouseFrame and AuctionHouseFrame.IsShown and AuctionHouseFrame:IsShown() or false;merchantOpen=MerchantFrame and MerchantFrame.IsShown and MerchantFrame:IsShown() or false end
+  elseif event=="AUCTION_HOUSE_SHOW" then auctionOpen=true
+  elseif event=="AUCTION_HOUSE_CLOSED" then auctionOpen=false
+  elseif event=="MERCHANT_SHOW" then merchantOpen=true
+  elseif event=="MERCHANT_CLOSED" then merchantOpen=false end
+  schedule()
+end)
 core.Subscribe(schedule)
