@@ -9,11 +9,23 @@ end
 local function build()
   if frame then return end
   frame=CreateFrame('Frame','MarketeerForeverMenu',UIParent,'BackdropTemplate');frame:SetSize(630,520);frame:SetPoint('CENTER');frame:SetMovable(true);frame:EnableMouse(true);frame:RegisterForDrag('LeftButton');frame:SetClampedToScreen(true)
+  local function maxScale()
+    local w=UIParent.GetWidth and UIParent:GetWidth() or 0;local h=UIParent.GetHeight and UIParent:GetHeight() or 0
+    if type(w)=='number' and w>0 and type(h)=='number' and h>0 then return math.max(.65,math.min(1.5,(w-20)/630,(h-20)/520)) end
+    return 1.5
+  end
+  local function applyScale(value) value=math.max(.65,math.min(maxScale(),tonumber(value) or 1));frame:SetScale(value);if MarketeerForeverCoreDB then MarketeerForeverCoreDB.menuScale=value end end
+  applyScale(MarketeerForeverCoreDB and MarketeerForeverCoreDB.menuScale)
   frame:SetScript('OnDragStart',function(s)s:StartMoving()end);frame:SetScript('OnDragStop',function(s)s:StopMovingOrSizing()end)
   frame:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});frame:SetBackdropColor(.025,.045,.038,.98);frame:SetBackdropBorderColor(.20,.43,.29,1)
   text(frame,'GameFontNormalLarge',22,-20):SetText('MARKETEER')
-  text(frame,'GameFontHighlightSmall',23,-44):SetText('Your market companion')
   local close=button(frame,'X',585,-14,28,function()frame:Hide()end);close:ClearAllPoints();close:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-15,-14);close:SetFrameLevel(frame:GetFrameLevel()+10)
+  local resize=CreateFrame('Button',nil,frame,'UIPanelButtonTemplate');resize:SetSize(62,20);resize:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',-6,6);resize:SetText('Resize')
+  resize:SetScript('OnMouseDown',function(self,mouseButton)if mouseButton~='LeftButton' then return end;self.startX,self.startY=GetCursorPosition();self.startScale=frame:GetScale();self.resizing=true end)
+  resize:SetScript('OnMouseUp',function(self)self.resizing=false end)
+  resize:SetScript('OnHide',function(self)self.resizing=false end)
+  resize:SetScript('OnUpdate',function(self)if not self.resizing then return end;if IsMouseButtonDown and not IsMouseButtonDown('LeftButton') then self.resizing=false;return end;local x,y=GetCursorPosition();local parentScale=UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1;if not parentScale or parentScale<=0 then parentScale=1 end;applyScale(self.startScale+((x-self.startX)-(y-self.startY))/(2*630*parentScale)) end)
+  resize:SetScript('OnEnter',function(self)if GameTooltip then GameTooltip:SetOwner(self,'ANCHOR_LEFT');GameTooltip:AddLine('Drag to resize Marketeer');GameTooltip:Show()end end);resize:SetScript('OnLeave',function()if GameTooltip then GameTooltip:Hide() end end)
   bag=CreateFrame('Frame',nil,frame);bag:SetAllPoints()
   text(bag,'GameFontNormal',22,-118):SetText('BAG TOOLS')
   text(bag,'GameFontHighlight',24,-151,565):SetText('Keep your bag tools close at hand. Deploy the coin, drag it anywhere, and click it to return here.')

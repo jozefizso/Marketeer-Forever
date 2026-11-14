@@ -13,6 +13,9 @@ import retention
 import bulk
 import bulk_low
 import history_export
+import history_export_full
+import names_export
+import item_names
 
 NOW = 1_800_000_000
 MARKET = 'forever/pvp/horde/us'
@@ -99,6 +102,24 @@ class TrendTests(unittest.TestCase):
         self.assertTrue(48 <= len(points) <= 51)
         self.assertTrue(all(p.endswith(',2') for p in points))  # fixture's low is one copper
         self.assertEqual(history_export.export(self.db,'forever/pvp/alliance/us',NOW).splitlines()[0].split('|')[-1],'0')
+
+    def test_full_history_export_preserves_every_hour(self):
+        for hour in range(80):
+            trends.ingest(self.db, snapshot(NOW-hour*3600-1, [(42, 100)]), NOW)
+        lines=history_export_full.export(self.db,MARKET,NOW).splitlines()
+        self.assertEqual(lines[0], 'HST2|%s|%d|1' % (MARKET,NOW))
+        points=lines[1].split(':',1)[1].split(';')
+        self.assertEqual(len(points),80)
+        self.assertEqual([int(p.split(',')[0],36) for p in points],list(range(80,0,-1)))
+
+    def test_name_export_preserves_unicode_and_quotes(self):
+        import base64
+        self.db.execute('create table item_names(item integer primary key,name text not null)')
+        self.db.execute('insert into item_names values (?,?)',(42,'Élixir "special"'))
+        lines=names_export.export(self.db,NOW).splitlines()
+        self.assertEqual(base64.b64decode(lines[1].split(':')[1]).decode(), 'Élixir "special"')
+        self.assertTrue(item_names.valid_name('Ice Cold Milk'))
+        self.assertFalse(item_names.valid_name('Item #42'))
 
     def test_retention_only_removes_expired_managed_data(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]) as tmp:

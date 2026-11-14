@@ -14,14 +14,21 @@ local function button(parent,caption,x,y,w,action)
 end
 local function dataFor(id)
   local d=_G.MarketeerForeverHistory;local market=core.Market()
-  if type(d)~='table' or d.schemaVersion~=1 or d.market~=market or type(d.generatedAt)~='number' or type(d.items)~='table' then return nil,nil end
+  if type(d)~='table' or (d.schemaVersion~=1 and d.schemaVersion~=2) or d.market~=market or type(d.generatedAt)~='number' or type(d.items)~='table' then return nil,nil end
   local encoded=d.items[id];if type(encoded)~='string' then return {},d end
   local points={};local base=math.floor(d.generatedAt/3600)*3600
-  for age,price in encoded:gmatch('(%d+),(%d+)') do
-    age,price=tonumber(age),tonumber(price)
+  for age,price in encoded:gmatch('([%da-z]+),([%da-z]+)') do
+    age,price=tonumber(age,d.schemaVersion==2 and 36 or 10),tonumber(price,d.schemaVersion==2 and 36 or 10)
     if age and age<=336 and price and price>0 then points[#points+1]={time=base-age*3600,price=price/2,age=age} end
   end
   table.sort(points,function(a,b)return a.time<b.time end);return points,d
+end
+local function itemNameFor(id)
+  local lookup=GetItemInfo or (C_Item and C_Item.GetItemInfo)
+  if lookup then local ok,n=pcall(lookup,id);if ok and not (issecretvalue and issecretvalue(n)) and type(n)=='string' and n~='' then return n end end
+  local catalog=_G.MarketeerForeverItemNames
+  local n=type(catalog)=='table' and catalog.schemaVersion==1 and type(catalog.items)=='table' and catalog.items[id]
+  if type(n)=='string' and n~='' then return n end
 end
 function core.CreateHistoryPanel(parent)
   local p=CreateFrame('Frame',nil,parent);p:SetAllPoints();p:Hide()
@@ -35,17 +42,29 @@ function core.CreateHistoryPanel(parent)
   local status=label(p,'GameFontHighlightSmall',115,-345,465);status:SetText('Choose an item to see its market history.')
   local ytop=label(p,'GameFontHighlightSmall',22,-270,84);local ymid=label(p,'GameFontHighlightSmall',22,-353,84);local ybottom=label(p,'GameFontHighlightSmall',22,-438,84)
   local xleft=label(p,'GameFontHighlightSmall',110,-457,220);local xright=label(p,'GameFontHighlightSmall',420,-457,175);xright:SetJustifyH('RIGHT')
-  local note=label(p,'GameFontHighlightSmall',22,-482,575);note:SetText('Hourly lowest buyouts; older than 48h: daily median lows. Prices from AHledger (ahledger.com).')
+  local note=label(p,'GameFontHighlightSmall',22,-482,530);note:SetText('Hourly lowest buyouts. Gaps indicate missing data. Prices from AHledger (ahledger.com).')
   local range='all';local itemId;local lines={};local dots={};local displayed={};local graphStart,graphEnd
+  local results,resultsPage={},1
+  local resultPanel=CreateFrame('Frame',nil,p,'BackdropTemplate');resultPanel:SetPoint('TOPLEFT',p,'TOPLEFT',22,-270);resultPanel:SetSize(568,190);resultPanel:SetFrameLevel(p:GetFrameLevel()+8);resultPanel:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});resultPanel:SetBackdropColor(.025,.055,.045,.99);resultPanel:SetBackdropBorderColor(.24,.55,.36,1);resultPanel:Hide()
+  local resultRows={};local resultPageLabel=label(resultPanel,'GameFontHighlightSmall',225,-171,150)
+  local draw
+  local function renderResults()
+    local maxPage=math.max(1,math.ceil(#results/6));resultsPage=math.max(1,math.min(maxPage,resultsPage))
+    for i,b in ipairs(resultRows) do local v=results[(resultsPage-1)*6+i];b.item=v;if v then b:SetText(v.name..'  (#'..v.id..')');b:Show() else b:Hide() end end
+    resultPageLabel:SetText('Page '..resultsPage..' / '..maxPage..'  |  '..#results..' matches')
+  end
+  for i=1,6 do local b=button(resultPanel,'',5,-3-(i-1)*26,558,function(self)if self.item then itemId=self.item.id;input:SetText(tostring(itemId));resultPanel:Hide();draw() end end);resultRows[i]=b end
+  button(resultPanel,'Previous',5,-163,82,function()resultsPage=resultsPage-1;renderResults()end)
+  button(resultPanel,'Next',93,-163,82,function()resultsPage=resultsPage+1;renderResults()end)
   local function clearGraph()
     for _,line in pairs(lines) do line:Hide() end;for _,dot in ipairs(dots) do dot:Hide() end
     displayed={};ytop:SetText('');ymid:SetText('');ybottom:SetText('');xleft:SetText('');xright:SetText('')
   end
-  local function draw()
+  draw=function()
     clearGraph();if not itemId then return end
     local points,d=dataFor(itemId)
     if not d then name:SetText('Item #'..itemId);meta:SetText('');status:SetText('Market history unavailable. Run the data updater and enable Marketeer Data.');return end
-    local itemName=GetItemInfo and GetItemInfo(itemId);name:SetText((itemName or ('Item #'..itemId))..'  |cff9aa9a4#'..itemId..'|r')
+    local itemName=itemNameFor(itemId);name:SetText(itemName and (itemName..'  |cff9aa9a4#'..itemId..'|r') or ('Item #'..itemId))
     if not itemName and C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID,itemId) end
     local now=(GetServerTime and GetServerTime()) or time();local elapsed=math.max(0,math.floor((now-d.generatedAt)/60))
     meta:SetText('Market: '..d.market..'  |  Updated '..elapsed..'m ago')
@@ -65,32 +84,30 @@ function core.CreateHistoryPanel(parent)
       local x=(v.time-graphStart)/(graphEnd-graphStart)*(w-8)+4;local y=(v.price-minY)/(maxY-minY)*(h-8)+4;v.x=x
       local dot=dots[i] or chart:CreateTexture(nil,'OVERLAY');dots[i]=dot;dot:SetColorTexture(.35,.95,.65,1);dot:SetSize(4,4);dot:ClearAllPoints();dot:SetPoint('CENTER',chart,'BOTTOMLEFT',x,y);dot:Show()
       if previous then
-        local old=(d.generatedAt-v.time)>48*3600;local oldPrev=(d.generatedAt-previous.time)>48*3600;local maxGap=(old or oldPrev) and 36*3600 or 3*3600
+        local old=(d.generatedAt-v.time)>48*3600;local oldPrev=(d.generatedAt-previous.time)>48*3600;local maxGap=(d.schemaVersion==1 and (old or oldPrev)) and 36*3600 or 3*3600
         if v.time-previous.time<=maxGap then local line=lines[i] or chart:CreateLine(nil,'ARTWORK');lines[i]=line;line:SetColorTexture(.25,.80,.55,1);line:SetThickness(2);line:SetStartPoint('BOTTOMLEFT',chart,previous.x,previous.y);line:SetEndPoint('BOTTOMLEFT',chart,x,y);line:Show() end
       end
       previous={time=v.time,x=x,y=y}
     end
+    note:SetText(d.schemaVersion==1 and 'Hourly lows; older data uses daily medians. Update for full history.' or 'Hourly lowest buyouts. Gaps indicate missing data. Prices from AHledger (ahledger.com).')
     status:SetText(#displayed==1 and 'One observation available.' or '')
   end
   local function search()
     local raw=input:GetText() or '';local id=tonumber(raw:match('item:(%d+)') or raw:match('^%s*(%d+)%s*$'))
     input:ClearFocus()
     if not id then
-      local query=raw:match('^%s*(.-)%s*$'):lower();local d=_G.MarketeerForeverHistory;local market=core.Market();local found,ambiguous
-      if query~='' and type(d)=='table' and d.market==market and type(d.items)=='table' and GetItemInfo then
+      local query=raw:match('^%s*(.-)%s*$'):lower();local d=_G.MarketeerForeverHistory;local market=core.Market();results={}
+      if query~='' and type(d)=='table' and d.market==market and type(d.items)=='table' then
         for candidate in pairs(d.items) do
-          local ok,itemName=pcall(GetItemInfo,candidate)
-          if ok and not (issecretvalue and issecretvalue(itemName)) and type(itemName)=='string' then
-            local lower=itemName:lower()
-            if lower==query then found=candidate;ambiguous=false;break end
-            if lower:find(query,1,true) then if found then ambiguous=true else found=candidate end end
-          end
+          local itemName=itemNameFor(candidate)
+          if itemName and itemName:lower():find(query,1,true) then results[#results+1]={id=candidate,name=itemName} end
         end
       end
-      if ambiguous then status:SetText('Several names match. Enter the full name or item ID.');return end
-      id=found
+      table.sort(results,function(a,b)local x,y=a.name:lower(),b.name:lower();if x==y then return a.id<b.id end;return x<y end)
+      if #results>1 then resultsPage=1;renderResults();resultPanel:Show();status:SetText('Select an item from the results.');return end
+      id=results[1] and results[1].id
     end
-    if not id or id<1 then status:SetText('Item not found in cached names. Use an item ID or item link.');return end
+    resultPanel:Hide();if not id or id<1 then status:SetText('Item not found. Try a different name, item ID, or item link.');return end
     itemId=id;input:SetText(tostring(id));draw()
   end
   input:SetScript('OnEnterPressed',search);input:SetScript('OnEscapePressed',function(s)s:ClearFocus()end);button(p,'Search',346,-158,75,search)
@@ -101,11 +118,12 @@ function core.CreateHistoryPanel(parent)
     if #displayed==0 or not chart.GetLeft or not GetCursorPosition then return end
     local left=chart:GetLeft();if not left then return end;local x=GetCursorPosition();local scale=chart:GetEffectiveScale() or 1;x=x/scale-left
     local best,dist;for _,v in ipairs(displayed) do local delta=math.abs((v.x or 0)-x);if not dist or delta<dist then best,dist=v,delta end end
-    if best and GameTooltip then GameTooltip:SetOwner(chart,'ANCHOR_TOP');GameTooltip:SetText(date('%b %d %H:%M',best.time));GameTooltip:AddLine(money(best.price)..(best.age>48 and ' (daily median low)' or ' (hourly low)'),1,1,1);GameTooltip:Show() end
+    if best and GameTooltip then local d=_G.MarketeerForeverHistory;GameTooltip:SetOwner(chart,'ANCHOR_TOP');GameTooltip:SetText(date('%b %d %H:%M',best.time));GameTooltip:AddLine(money(best.price)..(d and d.schemaVersion==1 and best.age>48 and ' (daily median low)' or ' (hourly low)'),1,1,1);GameTooltip:Show() end
   end
   chart:SetScript('OnEnter',function(self)self.hovered=true;hover()end);chart:SetScript('OnLeave',function(self)self.hovered=false;if GameTooltip then GameTooltip:Hide() end end)
   chart:SetScript('OnUpdate',function(self,delta)if self.hovered then self.elapsed=(self.elapsed or 0)+delta;if self.elapsed>=.1 then self.elapsed=0;hover() end end end)
-  function p:SetItem(id) itemId=tonumber(id);if itemId then input:SetText(tostring(itemId));selectRange('all') end end
+  function p:SetItem(id) itemId=tonumber(id);if itemId then resultPanel:Hide();input:SetText(tostring(itemId));selectRange('all') end end
   function p:Refresh() if itemId then draw() end end
+  p:RegisterEvent('GET_ITEM_INFO_RECEIVED');p:SetScript('OnEvent',function(_,_,id,success)if success and id==itemId and p:IsShown() then draw() end end)
   selectRange('all');return p
 end

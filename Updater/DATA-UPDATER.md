@@ -7,7 +7,7 @@ The current feed and addon target the WoW Forever client, not other game flavors
 ## Manual verification
 
 1. In a disposable Forever installation, install the updated `MarketeerForever` folder without `MarketeerForeverData` and check that the addon loads and basic auction features work.
-2. Run the updater, select that folder and a market, then update. Check that `MarketeerForeverData` contains its TOC, MarketData.lua, TrendData.lua, and HistoryData.lua, and that the main addon folder was not changed.
+2. Run the updater, select that folder and a market, then update. Check that `MarketeerForeverData` contains its TOC, MarketData.lua, TrendData.lua, HistoryData.lua, and ItemNames.lua, and that the main addon folder was not changed.
 3. Enable both addons, reload, and check AHledger sales/day and its displayed age for the selected market. Disable the data addon and reload; confirm the addon still works without external sales data.
 4. Refresh while WoW is open and use `/reload`; verify the new timestamp appears. Test a failed download and confirm MarketData.lua is unchanged. Replace the main addon folder and confirm the data addon remains.
 
