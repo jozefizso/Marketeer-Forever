@@ -54,7 +54,9 @@ local function restorePosition()
   local bags=_G.ContainerFrameCombinedBags
   local pos=MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagPosition
   if not bags or not pos or type(pos.x)~="number" or type(pos.y)~="number" then return end
-  if InCombatLockdown and InCombatLockdown() then return end
+  -- Blizzard can lay the combined bags out again when they are reopened.
+  -- Restore the saved position in combat only when the frame is unprotected.
+  if InCombatLockdown and InCombatLockdown() and (not bags.IsProtected or bags:IsProtected()) then return end
   local x,y=pos.x,pos.y
   -- Older releases saved coordinates in UIParent units.
   if pos.version~=2 then local scale=bags:GetEffectiveScale()/UIParent:GetEffectiveScale();x,y=x/scale,y/scale end

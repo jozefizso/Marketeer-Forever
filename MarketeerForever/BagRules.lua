@@ -65,6 +65,12 @@ function core.BagRuleValue(item)
 end
 local function paint(button,bag,slot)
   local dot=dots[button]
+  -- Prepare markers for every slot outside combat, including currently empty
+  -- or unpriced slots, so they can be updated without creating regions later.
+  if not dot and not (InCombatLockdown and InCombatLockdown()) then
+    local layer=button._textOverlay or button
+    dot=layer:CreateTexture(nil,"OVERLAY",nil,7);dot:SetSize(9,9);dot:SetPoint("BOTTOMLEFT",button,"BOTTOMLEFT",3,3);dot:Hide();dots[button]=dot
+  end
   local info=C_Container and C_Container.GetContainerItemInfo and C_Container.GetContainerItemInfo(bag,slot)
   local id=info and (info.itemID or (info.hyperlink and tonumber(info.hyperlink:match("item:(%d+)"))))
   local selected
@@ -78,11 +84,7 @@ local function paint(button,bag,slot)
     end
   end
   if not selected then if dot then dot:Hide() end;return end
-  if not dot then
-    if InCombatLockdown and InCombatLockdown() then return end
-    local layer=button._textOverlay or button
-    dot=layer:CreateTexture(nil,"OVERLAY",nil,7);dot:SetSize(9,9);dot:SetPoint("BOTTOMLEFT",button,"BOTTOMLEFT",3,3);dots[button]=dot
-  end
+  if not dot then return end
   dot:SetColorTexture(selected.r or 1,selected.g or 1,selected.b or 1,1);dot:Show()
 end
 -- Recheck the exact bag slot when its item tooltip becomes available. Item
