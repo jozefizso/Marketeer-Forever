@@ -171,8 +171,17 @@ local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,no
     p.footer=p:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");p.footer:SetPoint("BOTTOMLEFT",p,"BOTTOMLEFT",10,8)
     p:SetScript("OnUpdate",function(self,elapsed)
       local o=self.trendOwner
-      if not o or not o.IsShown or not o:IsShown() or not IsShiftKeyDown or not IsShiftKeyDown() then self:Hide();return end
-      if o.GetItem then local _,link=o:GetItem();local currentId=type(link)=="string" and tonumber(link:match("item:(%d+)"));if currentId and currentId~=self.trendItem then self:Hide();return end end
+      if not IsShiftKeyDown or not IsShiftKeyDown() then self:Hide();return end
+      -- Auction-house tooltips may briefly hide or change their item while
+      -- refreshing. Wait for that transition to settle before hiding the panel.
+      local unavailable=not o or not o.IsShown or not o:IsShown()
+      if not unavailable and o.GetItem then local _,link=o:GetItem();local currentId=type(link)=="string" and tonumber(link:match("item:(%d+)"));unavailable=currentId and currentId~=self.trendItem end
+      if unavailable then
+        self.ownerMissingFor=(self.ownerMissingFor or 0)+(elapsed or 0)
+        if self.ownerMissingFor>=.2 then self:Hide() end
+        return
+      end
+      self.ownerMissingFor=0
       local state=comparisonState()
       if state~=self.pendingComparison then self.pendingComparison=state;self.comparisonElapsed=0
       elseif state~=self.placedComparison then
@@ -183,7 +192,7 @@ local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,no
   end
   local p=trendPanel
   if p.trendOwner~=owner or p.trendItem~=id or not p:IsShown() then
-    p.trendOwner=owner;p.trendItem=id;p.pendingComparison=comparisonState();p.placedComparison=p.pendingComparison;p.comparisonElapsed=0;placeTrendPanel(p,owner)
+    p.trendOwner=owner;p.trendItem=id;p.ownerMissingFor=0;p.pendingComparison=comparisonState();p.placedComparison=p.pendingComparison;p.comparisonElapsed=0;placeTrendPanel(p,owner)
   end
   p.currentLabel:SetText(current and (currentSource..(currentAge and (" ("..currentAge.."m ago)") or " (age ?)")) or "Latest AH price")
   p.currentValue:SetText(current and money(current) or "Unavailable")
@@ -203,9 +212,8 @@ local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,no
 end
 local function addValue(tooltip,data)
   if tooltip.IsForbidden and tooltip:IsForbidden() then return end
-  local id=data and data.id
   local link;if tooltip.GetItem then local _;_,link=tooltip:GetItem() end
-  if not id then id=link and tonumber(link:match("item:(%d+)")) end
+  local id=type(link)=="string" and tonumber(link:match("item:(%d+)")) or (data and data.id)
   if not id then if tooltip==GameTooltip then hideTrendPanel() end;return end
   if tooltip==GameTooltip and MarketeerForeverCore.RefreshBagRuleForTooltip then MarketeerForeverCore.RefreshBagRuleForTooltip(tooltip,id) end
   local market=MarketeerForeverCore.Market();local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
