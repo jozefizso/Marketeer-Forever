@@ -134,15 +134,23 @@ local function placeTrendPanel(p,owner)
     return f:GetLeft()*ratio,f:GetRight()*ratio,f:GetTop()*ratio,f:GetBottom()*ratio
   end
   local left,right,top,bottom=bounds(owner);if not left then return end
+  local leftFrame,rightFrame,topFrame,bottomFrame=owner,owner,owner,owner
   for _,f in ipairs({ShoppingTooltip1,ShoppingTooltip2}) do
-    local l,r,t,b=bounds(f);if l then left=math.min(left,l);right=math.max(right,r);top=math.max(top,t);bottom=math.min(bottom,b) end
+    local l,r,t,b=bounds(f)
+    if l then
+      if l<left then left,leftFrame=l,f end;if r>right then right,rightFrame=r,f end
+      if t>top then top,topFrame=t,f end;if b<bottom then bottom,bottomFrame=b,f end
+    end
   end
   local width,height=p:GetWidth(),p:GetHeight();local sw,sh=UIParent:GetWidth(),UIParent:GetHeight()
   p:ClearAllPoints()
-  if right+8+width<=sw then p:SetPoint("TOPLEFT",UIParent,"BOTTOMLEFT",right+8,math.min(sh,top))
-  elseif left-8-width>=0 then p:SetPoint("TOPLEFT",UIParent,"BOTTOMLEFT",left-8-width,math.min(sh,top))
-  elseif bottom-8-height>=0 then p:SetPoint("TOPLEFT",UIParent,"BOTTOMLEFT",math.max(0,math.min(sw-width,left)),bottom-8)
-  else p:SetPoint("BOTTOMLEFT",UIParent,"BOTTOMLEFT",math.max(0,math.min(sw-width,left)),math.min(sh-height,top+8)) end
+  if right+8+width<=sw then p:SetPoint("TOPLEFT",rightFrame,"TOPRIGHT",8,0)
+  elseif left-8-width>=0 then p:SetPoint("TOPRIGHT",leftFrame,"TOPLEFT",-8,0)
+  elseif bottom-8-height>=0 then p:SetPoint("TOPLEFT",bottomFrame,"BOTTOMLEFT",0,-8)
+  else p:SetPoint("BOTTOMLEFT",topFrame,"TOPLEFT",0,8) end
+end
+local function comparisonState()
+  return (ShoppingTooltip1 and ShoppingTooltip1:IsShown() and 1 or 0)+(ShoppingTooltip2 and ShoppingTooltip2:IsShown() and 2 or 0)
 end
 local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,now)
   if not trendPanel then
@@ -161,14 +169,22 @@ local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,no
       p.rows[i]={left=left,right=right}
     end
     p.footer=p:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");p.footer:SetPoint("BOTTOMLEFT",p,"BOTTOMLEFT",10,8)
-    p:SetScript("OnUpdate",function(self)
+    p:SetScript("OnUpdate",function(self,elapsed)
       local o=self.trendOwner
       if not o or not o.IsShown or not o:IsShown() or not IsShiftKeyDown or not IsShiftKeyDown() then self:Hide();return end
-      if o.GetItem then local _,link=o:GetItem();local currentId=type(link)=="string" and tonumber(link:match("item:(%d+)"));if currentId and currentId~=self.trendItem then self:Hide() end end
-      placeTrendPanel(self,o)
+      if o.GetItem then local _,link=o:GetItem();local currentId=type(link)=="string" and tonumber(link:match("item:(%d+)"));if currentId and currentId~=self.trendItem then self:Hide();return end end
+      local state=comparisonState()
+      if state~=self.pendingComparison then self.pendingComparison=state;self.comparisonElapsed=0
+      elseif state~=self.placedComparison then
+        self.comparisonElapsed=(self.comparisonElapsed or 0)+(elapsed or 0)
+        if self.comparisonElapsed>=.15 then placeTrendPanel(self,o);self.placedComparison=state end
+      end
     end)
   end
-  local p=trendPanel;p.trendOwner=owner;p.trendItem=id;placeTrendPanel(p,owner)
+  local p=trendPanel
+  if p.trendOwner~=owner or p.trendItem~=id or not p:IsShown() then
+    p.trendOwner=owner;p.trendItem=id;p.pendingComparison=comparisonState();p.placedComparison=p.pendingComparison;p.comparisonElapsed=0;placeTrendPanel(p,owner)
+  end
   p.currentLabel:SetText(current and (currentSource..(currentAge and (" ("..currentAge.."m ago)") or " (age ?)")) or "Latest AH price")
   p.currentValue:SetText(current and money(current) or "Unavailable")
   local periods={{"24 hours",trend and trend.p24},{"48 hours",trend and trend.p48},{"14 days",trend and trend.p14}}
