@@ -21,6 +21,7 @@ local expandedAuction
 local selectedAuctions={}
 local bulkCancel,selectAll,clearSelection
 local pendingDeposit
+local depositHooks=setmetatable({},{__mode="k"})
 scrollOffset=0
 local function formatMoney(n)
   if type(n)~="number" then return "--" end
@@ -374,8 +375,8 @@ function core.OnOpen()
     for _,kind in ipairs({"CommoditiesSellFrame","ItemSellFrame"}) do
       local sell=AuctionHouseFrame[kind]
       local isCommodity=kind=="CommoditiesSellFrame"
-      if sell and sell.PostButton and sell.PostButton.HookScript and not sell.marketeerDepositHook then
-        sell.marketeerDepositHook=true
+      if sell and sell.PostButton and sell.PostButton.HookScript and not depositHooks[sell] then
+        depositHooks[sell]=true
         sell.PostButton:HookScript("PreClick",function()
           pendingDeposit=nil
           local ok,candidate=pcall(function()

@@ -102,15 +102,17 @@ function MarketeerForeverAPI.GetTrend(id)
   return {p24=price(r[1]),p48=price(r[2]),p14=price(r[3]),recent=price(r[4]),observed=r[5]}
 end
 function core.Subscribe(fn) core.listeners[#core.listeners+1]=fn end
+local sellListHooks=setmetatable({},{__mode="k"})
+local sellScanNotices=setmetatable({},{__mode="k"})
 -- The native sell lists cache their column widths. Noki's wider tabs can leave
 -- those widths stale after the auction window returns to its normal size.
 local function setupSellListLayout()
   if not AuctionHouseFrame then return end
   for _,name in ipairs({"CommoditiesSellList","ItemSellList"}) do
     local list=AuctionHouseFrame[name]
-    if list and list.HookScript and not list.marketeerLayoutHooked then
-      list.marketeerLayoutHooked=true
-      local pending=false
+    if list and list.HookScript and not sellListHooks[list] then
+      sellListHooks[list]=true
+      local pending,lastWidth=false,nil
       local function schedule()
         if pending then return end
         pending=true
@@ -118,9 +120,9 @@ local function setupSellListLayout()
           pending=false
           if not list.IsVisible or not list:IsVisible() or not list.isInitialized then return end
           local scroll=list.ScrollBox;local width=scroll and scroll.GetWidth and scroll:GetWidth()
-          if type(width)~="number" or width<=0 or width==list.marketeerLayoutWidth then return end
+          if type(width)~="number" or width<=0 or width==lastWidth then return end
           if type(list.SetTableBuilderLayout)~="function" or type(list.tableBuilderLayoutFunction)~="function" then return end
-          list.marketeerLayoutWidth=width
+          lastWidth=width
           list:SetTableBuilderLayout(list.tableBuilderLayoutFunction)
           if list.DirtyScrollFrame then list:DirtyScrollFrame() end
         end
@@ -136,11 +138,11 @@ local function setupSellScanNotice()
   if not AuctionHouseFrame then return end
   for _,key in ipairs({"CommoditiesSellFrame","ItemSellFrame"}) do
     local frame=AuctionHouseFrame[key]
-    if frame and frame.PostButton and not frame.marketeerScanNotice then
+    if frame and frame.PostButton and not sellScanNotices[frame] then
       local notice=frame:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
       notice:SetPoint("TOP",frame.PostButton,"BOTTOM",0,-5);notice:SetWidth(230)
       notice:SetText("Auctions cannot be created while the scan is running.");notice:SetTextColor(1,.75,.25);notice:Hide()
-      frame.marketeerScanNotice=notice
+      sellScanNotices[frame]=notice
       if hooksecurefunc and frame.UpdatePostButtonState then
         hooksecurefunc(frame,"UpdatePostButtonState",function(self)
           if core.phase~="idle" then self.PostButton:Disable() end
@@ -154,8 +156,8 @@ local function updateSellScanNotice()
   if not AuctionHouseFrame then return end
   for _,key in ipairs({"CommoditiesSellFrame","ItemSellFrame"}) do
     local frame=AuctionHouseFrame[key]
-    if frame and frame.marketeerScanNotice then
-      frame.marketeerScanNotice:SetShown(core.phase~="idle")
+    if frame and sellScanNotices[frame] then
+      sellScanNotices[frame]:SetShown(core.phase~="idle")
       if core.phase~="idle" then frame.PostButton:Disable()
       elseif frame.UpdatePostButtonState then frame:UpdatePostButtonState() end
     end
