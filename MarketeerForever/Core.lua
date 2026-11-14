@@ -294,12 +294,17 @@ end)
 -- Independent auction-house tabs; native tabs hide the Noki overlay when selected.
 MarketeerForeverTabs={tabs={},ordered={}}
 local tabOrder={MarketeerForeverMarketFlips=1,MarketeerForeverCraftCrafting=2,MarketeerForeverOwned=3,MarketeerForeverDemand=4,MarketeerForeverPurchaseHistory=5}
+local function centerTabLabel(button)
+  local text=button.GetFontString and button:GetFontString()
+  if text then text:ClearAllPoints();text:SetPoint("CENTER",button,"CENTER",0,0) end
+end
 function MarketeerForeverTabs:DoesIDExist(id) return self.tabs[id]~=nil end
 function MarketeerForeverTabs:HideAll()
   self.selected=nil
   for _,entry in ipairs(self.ordered) do
     entry.host:Hide()
     if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(entry.button) end
+    centerTabLabel(entry.button)
   end
 end
 function MarketeerForeverTabs:CreateTab(id,host,label)
@@ -336,6 +341,7 @@ function MarketeerForeverTabs:CreateTab(id,host,label)
     previous=tab.button
   end
   if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(button) end
+  centerTabLabel(button)
   button:SetScript("OnClick",function() self:SetSelected(id) end)
 end
 function MarketeerForeverTabs:SetSelected(id)
@@ -347,6 +353,7 @@ function MarketeerForeverTabs:SetSelected(id)
     if AuctionHouseFrame.SetDisplayMode then AuctionHouseFrame:SetDisplayMode({}) end
     if type(AuctionHouseFrame.Tabs)=="table" and PanelTemplates_DeselectTab then for _,native in ipairs(AuctionHouseFrame.Tabs) do PanelTemplates_DeselectTab(native) end end
     if PanelTemplates_SelectTab then PanelTemplates_SelectTab(tab.button) end
+    centerTabLabel(tab.button)
     self.selected=id
     tab.host:Show()
   end
