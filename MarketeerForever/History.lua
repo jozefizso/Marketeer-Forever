@@ -60,7 +60,7 @@ function core.CreateHistoryPanel(parent)
   local suppressSearch=false;local searchSerial=0;local renderedQuery
   local resultPanel=CreateFrame('Frame',nil,p,'BackdropTemplate');resultPanel:SetPoint('TOPLEFT',input,'BOTTOMLEFT',-4,-3);resultPanel:SetSize(374,147);resultPanel:SetFrameLevel(p:GetFrameLevel()+20);resultPanel:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});resultPanel:SetBackdropColor(.025,.045,.038,1);resultPanel:SetBackdropBorderColor(.22,.58,.36,1);resultPanel:Hide()
   local resultRows={};local resultPageLabel=label(resultPanel,'GameFontHighlightSmall',90,-125,275)
-  local draw
+  local draw,selectRange
   local function renderResults()
     local maxPage=math.max(1,math.ceil(#results/5));resultsPage=math.max(1,math.min(maxPage,resultsPage))
     for i,b in ipairs(resultRows) do local index=(resultsPage-1)*5+i;local v=results[index];b.item=v;if v then b.caption:SetText(v.name);b.idText:SetText('#'..v.id);b:SetBackdropColor(index==selectedResult and .12 or .04,index==selectedResult and .19 or .07,index==selectedResult and .13 or .055,1);b:Show() else b:Hide() end end
@@ -68,7 +68,7 @@ function core.CreateHistoryPanel(parent)
   end
   local function choose(v)
     if not v then return end
-    searchSerial=searchSerial+1;itemId=v.id;suppressSearch=true;input:SetText(v.name or tostring(v.id));suppressSearch=false;input:ClearFocus();resultPanel:Hide();draw()
+    searchSerial=searchSerial+1;itemId=v.id;suppressSearch=true;input:SetText(v.name or tostring(v.id));suppressSearch=false;input:ClearFocus();resultPanel:Hide();selectRange('all')
   end
   for i=1,5 do local b=button(resultPanel,'',4,-4-(i-1)*23,366,function(self)choose(self.item)end);b.caption:ClearAllPoints();b.caption:SetPoint('LEFT',b,'LEFT',9,0);b.caption:SetWidth(275);b.caption:SetJustifyH('LEFT');b.idText=b:CreateFontString(nil,'OVERLAY','GameFontDisableSmall');b.idText:SetPoint('RIGHT',b,'RIGHT',-8,0);resultRows[i]=b end
   button(resultPanel,'<',5,-121,35,function()resultsPage=math.max(1,resultsPage-1);selectedResult=(resultsPage-1)*5+1;renderResults()end)
@@ -84,7 +84,7 @@ function core.CreateHistoryPanel(parent)
     local itemName=itemNameFor(itemId);name:SetText(itemName and (itemName..'  |cff9aa9a4#'..itemId..'|r') or ('Item #'..itemId))
     if not itemName and C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID,itemId) end
     local now=(GetServerTime and GetServerTime()) or time();local elapsed=math.max(0,math.floor((now-d.generatedAt)/60))
-    meta:SetText('Market: '..d.market..'  |  Updated '..elapsed..'m ago')
+    meta:SetText('Market: '..d.market..'  |  Updated '..elapsed..'m ago'..(#points>0 and ('  |  '..#points..' observations') or ''))
     local span=range=='24h' and 24 or range=='48h' and 48 or range=='7d' and 168 or range=='14d' and 336 or nil
     local start=span and (d.generatedAt-span*3600) or -math.huge
     for _,v in ipairs(points) do if v.time>=start and v.time<=d.generatedAt then displayed[#displayed+1]=v end end
@@ -149,7 +149,7 @@ function core.CreateHistoryPanel(parent)
   end)
   button(p,'Search',346,-158,75,search)
   local options={{'All','all'},{'24h','24h'},{'48h','48h'},{'7d','7d'},{'14d','14d'}}
-  local buttons={};local function selectRange(value)range=value;for _,b in ipairs(buttons) do b:SetAlpha(b.range==range and 1 or .65) end;draw() end
+  local buttons={};selectRange=function(value)range=value;for _,b in ipairs(buttons) do b:SetAlpha(b.range==range and 1 or .65) end;draw() end
   for i,opt in ipairs(options) do local b=button(p,opt[1],22+(i-1)*82,-241,75,function()selectRange(opt[2])end);b.range=opt[2];buttons[i]=b end
   local function hover()
     if #displayed==0 or not chart.GetLeft or not GetCursorPosition then return end

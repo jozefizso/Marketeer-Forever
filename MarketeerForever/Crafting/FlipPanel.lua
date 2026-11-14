@@ -207,12 +207,13 @@ local function calculate()
   if viewMode == "lookup" then calculateLookup(); return end
   if viewMode == "craft" then
     results={};selectedID=nil
+    for _,box in ipairs({budgetBox,minSalesBox,minStackProfitBox}) do if not (box:GetText() or ""):match("%S") then box:SetText("0") end end
     local budget=tonumber(budgetBox:GetText());local sales=tonumber(minSalesBox:GetText());local gain=tonumber(minStackProfitBox:GetText())
     if not sales or sales<0 or not gain or gain<0 or (budgetBox:GetText():match("%S") and (not budget or budget<0)) then
-      status:SetText("Enter non-negative filters; max spend may be blank.");filterAndSort();return
+      status:SetText("Enter non-negative filters; max spend 0 means no limit.");filterAndSort();return
     end
     MarketeerForeverCraftDB.craftBudgetSilver=budgetBox:GetText();MarketeerForeverCraftDB.craftMinSales=sales;MarketeerForeverCraftDB.craftMinProfit=gain
-    local found,err,stats=MarketeerForeverCraftCraftCandidates(gain,sales,MarketeerForeverCraftDB.flipMatchPrice==true,MarketeerForeverCraftDB.craftKnownOnly==true,budget and budget*100 or nil,MarketeerForeverCraftDB.craftProfession)
+    local found,err,stats=MarketeerForeverCraftCraftCandidates(gain,sales,MarketeerForeverCraftDB.flipMatchPrice==true,MarketeerForeverCraftDB.craftKnownOnly==true,budget and budget>0 and budget*100 or nil,MarketeerForeverCraftDB.craftProfession)
     if err then
       status:SetText(err);filterAndSort()
       detailTitle:SetText("ACTION NEEDED")
@@ -354,6 +355,7 @@ local function createPanel()
   updatePricing()
   minProfitLabel=makeText(panel,nil,18,-80,125,"GameFontNormalSmall");minProfitLabel:SetText("MIN PACK GAIN (S)")
   minStackProfitBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");minStackProfitBox:SetSize(48,20);minStackProfitBox:SetPoint("TOPLEFT",panel,"TOPLEFT",155,-74);minStackProfitBox:SetAutoFocus(false);minStackProfitBox:SetFontObject("GameFontHighlight");minStackProfitBox:SetText(tostring((MarketeerForeverCraftDB and MarketeerForeverCraftDB.flipMinPackProfitSilver) or 0));minStackProfitBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);minStackProfitBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
+  for _,box in ipairs({budgetBox,minSalesBox,minStackProfitBox}) do box:SetScript("OnEditFocusLost",function(self) if viewMode=="craft" and not (self:GetText() or ""):match("%S") then self:SetText("0") end end) end
   status=makeText(panel,nil,18,-101,690,"GameFontHighlightSmall");status:SetText("Waiting for auction data.")
   local header=CreateFrame("Frame",nil,panel,"BackdropTemplate");header:SetPoint("TOPLEFT",panel,"TOPLEFT",10,-122);header:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-10,-122);header:SetHeight(22);header:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});header:SetBackdropColor(0.13,0.18,0.17,1)
   local cols={{"ITEM / VENDOR",8,245},{"BUY / UNIT",265,95},{"SELL / UNIT",370,95},{"GAIN / UNIT",475,95},{"GAIN / PACK",580,100},{"ACTIVITY",690,90},{"LISTED",790,75},{"GAP / 1D",875,90}}
@@ -432,13 +434,14 @@ local function createPanel()
     knownButton:SetText(MarketeerForeverCraftDB.craftKnownOnly and "Known only" or "All recipes")
     minProfitLabel:SetText(craft and "MIN CRAFT GAIN (S)" or "MIN PACK GAIN (S)")
     sortButton:SetText("Sort: "..(craft and sortMode=="gain" and "Gain per craft" or sortLabels[sortMode]))
-    budgetBox:SetText(tostring(craft and (MarketeerForeverCraftDB.craftBudgetSilver or "") or (MarketeerForeverCraftDB.flipBudgetSilver or 15)))
-    minSalesBox:SetText(tostring(craft and (MarketeerForeverCraftDB.craftMinSales or 1) or (MarketeerForeverCraftDB.flipMinSalesPerDay or 1)))
-    minStackProfitBox:SetText(tostring(craft and (MarketeerForeverCraftDB.craftMinProfit or 0) or (MarketeerForeverCraftDB.flipMinPackProfitSilver or 0)))
+    local craftBudget=tonumber(MarketeerForeverCraftDB.craftBudgetSilver) or 0
+    budgetBox:SetText(tostring(craft and craftBudget or (MarketeerForeverCraftDB.flipBudgetSilver or 15)))
+    minSalesBox:SetText(tostring(craft and (tonumber(MarketeerForeverCraftDB.craftMinSales) or 0) or (MarketeerForeverCraftDB.flipMinSalesPerDay or 1)))
+    minStackProfitBox:SetText(tostring(craft and (tonumber(MarketeerForeverCraftDB.craftMinProfit) or 0) or (MarketeerForeverCraftDB.flipMinPackProfitSilver or 0)))
     modeButton:SetShown(not craft)
     modeButton:SetText(lookup and "Vendor flips" or "Item lookup")
     title:SetText(lookup and "ITEM LOOKUP" or craft and "CRAFTING PROFIT" or "VENDOR FLIP FINDER")
-    subtitle:SetText(lookup and "Search loaded items by name, vendor or ID." or craft and "Buy materials at AH lows; profit is per craft. Capture recipes with a profession open." or "One-pack vendor cost vs sell price per unit. Select a row for details.")
+    subtitle:SetText(lookup and "Search loaded items by name, vendor or ID." or craft and "AH material costs; profit per craft. Max 0 means no limit. Capture recipes with a profession open." or "One-pack vendor cost vs sell price per unit. Select a row for details.")
     local labels=lookup and {"ITEM / VARIANT","VENDOR / UNIT","AH LOW / UNIT","LISTED","VENDOR PACK","EST. / DAY","",""} or craft and {"RECIPE / PROFESSION","COST / CRAFT","SELL / UNIT","GAIN / CRAFT","YIELD","EST. / DAY","LISTED","GAP / 1D"} or {"ITEM / VENDOR","BUY / UNIT","SELL / UNIT","GAIN / UNIT","GAIN / PACK","ACTIVITY","",""}
     for i,label in ipairs(labels) do headerTexts[i]:SetText(label) end
     calculate()

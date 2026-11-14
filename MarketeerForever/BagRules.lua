@@ -154,8 +154,22 @@ local function schedule()
 end
 core.RefreshBagRules=schedule
 local baganatorRegistered=false
+local baganatorViews=setmetatable({},{__mode="k"})
+local function hookBaganatorView(frame)
+  if not frame or not frame.HookScript or baganatorViews[frame] then return end
+  baganatorViews[frame]=true
+  frame:HookScript("OnShow",function() schedule() end)
+end
+local function hookBaganatorViews()
+  for _,name in ipairs(UISpecialFrames or {}) do
+    if type(name)=="string" and (name:match("^Baganator_SingleViewBackpackViewFrame") or name:match("^Baganator_CategoryViewBackpackViewFrame")) then
+      hookBaganatorView(_G[name])
+    end
+  end
+end
 local function setupBaganator()
-  if baganatorRegistered or not Baganator or not Baganator.API or not Baganator.API.RegisterCornerWidget then return end
+  if not Baganator or not Baganator.API or not Baganator.API.RegisterCornerWidget then return end
+  if baganatorRegistered then hookBaganatorViews();return end
   Baganator.API.RegisterCornerWidget("Marketeer selling rules","marketeer_selling_rules",function(texture,details)
     if type(details)~="table" then return false end
     local link=details.itemLink;local id=details.itemID or (type(link)=="string" and tonumber(link:match("item:(%d+)")))
@@ -167,6 +181,11 @@ local function setupBaganator()
     local marker=button:CreateTexture(nil,"OVERLAY",nil,7);marker:SetSize(9,9);return marker
   end,{corner="bottom_left",priority=1})
   baganatorRegistered=true
+  if Baganator.CallbackRegistry and Baganator.CallbackRegistry.RegisterCallback then
+    Baganator.CallbackRegistry:RegisterCallback("BagShow",function() hookBaganatorViews();schedule() end)
+    Baganator.CallbackRegistry:RegisterCallback("BackpackFrameChanged",function(_,frame) hookBaganatorView(frame);schedule() end)
+  end
+  hookBaganatorViews()
 end
 local hooked=setmetatable({},{__mode="k"})
 local function hookFrames()
