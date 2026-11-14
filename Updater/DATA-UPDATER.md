@@ -2,7 +2,7 @@
 
 The `Marketeer Forever Data Updater.exe` downloads AHledger market, trend and history data only. Install the compatible `MarketeerForever` addon first, select its folder in the updater, choose the market and click Update now. The updater creates `Interface/AddOns/MarketeerForeverData` alongside it. Enable Marketeer Data in WoW's AddOns list for each character as needed. After an update, use `/reload` if WoW is running, or start the game. The updater does not update addon code; use CurseForge for that.
 
-The current feed and addon target the WoW Forever client, not other game flavors. The data addon's interface version is copied from the selected NokiTrading TOC. The reader rejects companion data older than 48 hours; a failed download leaves the last generated data file in place. Existing manually imported market tables remain supported. Old versions of the updater still install addon code and write into the main folder: replace those separately when distributing this version.
+The current feed and addon target the WoW Forever client, not other game flavors. The data addon's interface version is copied from the selected MarketeerForever TOC. The reader rejects companion data older than 48 hours; a failed download leaves the last generated data file in place. Existing manually imported market tables remain supported. Old versions of the updater still install addon code and write into the main folder: replace those separately when distributing this version.
 
 ## Manual verification
 

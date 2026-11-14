@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: Marketeer
 ## Notes: Market, crafting, auction tracking and help.
-## Version: 1.0.70
+## Version: 1.0.71
 ## SavedVariables: MarketeerForeverCoreDB, MarketeerForeverMarketDB, MarketeerForeverCraftDB, NokiUnifiedCoreDB, NokiUnifiedMarketDB, NokiUnifiedCraftDB
 ## OptionalDeps: MarketeerForeverData
 Core.lua
