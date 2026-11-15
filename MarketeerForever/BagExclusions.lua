@@ -2,6 +2,7 @@
 local core=MarketeerForeverCore
 local window,rows,status=nil,{},nil
 local entries,offset,pageSize={},0,8
+local view="all"
 local requested={}
 local function excludedItems()
   MarketeerForeverCoreDB=MarketeerForeverCoreDB or {}
@@ -37,8 +38,10 @@ local function collect()
     local id=tonumber(key)
     if enabled and id and not items[id] then items[id]={id=id,count=0} end
   end
-  local list={}
-  for _,item in pairs(items) do item.name,item.icon=itemInfo(item.id);list[#list+1]=item end
+  local list={};local excluded=excludedItems()
+  for _,item in pairs(items) do
+    if view~="excluded" or excluded[tostring(item.id)] then item.name,item.icon=itemInfo(item.id);list[#list+1]=item end
+  end
   table.sort(list,function(a,b)
     if (a.count>0)~=(b.count>0) then return a.count>0 end
     if a.name~=b.name then return a.name<b.name end
@@ -59,19 +62,28 @@ local function render(rebuild)
       row.check:SetChecked(excluded[tostring(item.id)] and true or false);row:Show()
     else row.itemID=nil;row:Hide() end
   end
-  status:SetText(#entries==0 and "No bag items or exclusions found." or ("Showing "..(offset+1).."-"..math.min(offset+pageSize,#entries).." of "..#entries))
+  status:SetText(#entries==0 and (view=="excluded" and "No excluded items." or "No bag items or exclusions found.") or ("Showing "..(offset+1).."-"..math.min(offset+pageSize,#entries).." of "..#entries..(view=="excluded" and " excluded" or " items")))
 end
 local function build()
   if window then return end
   window=CreateFrame("Frame","MarketeerForeverBagExclusionsWindow",UIParent,"BackdropTemplate")
   core.RegisterEscapeFrame("MarketeerForeverBagExclusionsWindow")
-  window:SetSize(530,430);window:SetPoint("CENTER");window:SetFrameStrata("FULLSCREEN_DIALOG");window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
+  window:SetSize(530,465);window:SetPoint("CENTER");window:SetFrameStrata("FULLSCREEN_DIALOG");window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
   window:SetScript("OnDragStart",function(self) self:StartMoving() end);window:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
   window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,.98);window:SetBackdropBorderColor(.35,.42,.37,1)
-  local title=window:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",16,-16);title:SetText("EXCLUDE FROM BAG VALUE")
-  local note=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",16,-43);note:SetPoint("TOPRIGHT",-16,-43);note:SetJustifyH("LEFT");note:SetText("Check an item to exclude all of its stacks from your bag value. Uncheck to include it again. Exclusions are shared across characters.")
+  local title=window:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",16,-16);title:SetText("EXCLUDED ITEMS")
+  local note=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",16,-43);note:SetPoint("TOPRIGHT",-16,-43);note:SetJustifyH("LEFT");note:SetText("Excluded items are omitted from bag value and do not show selling-rule dots. Exclusions apply to all stacks and are shared across characters.")
+  local all=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");all:SetSize(110,24);all:SetPoint("TOPLEFT",16,-81);all:SetText("All items")
+  local only=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");only:SetSize(120,24);only:SetPoint("LEFT",all,"RIGHT",8,0);only:SetText("Excluded only")
+  local function selectView(nextView)
+    view=nextView;offset=0
+    if all.GetFontString and all:GetFontString() then all:GetFontString():SetTextColor(view=="all" and .4 or 1,1,view=="all" and .5 or 1) end
+    if only.GetFontString and only:GetFontString() then only:GetFontString():SetTextColor(view=="excluded" and .4 or 1,1,view=="excluded" and .5 or 1) end
+    render(true)
+  end
+  all:SetScript("OnClick",function() selectView("all") end);only:SetScript("OnClick",function() selectView("excluded") end)
   for i=1,pageSize do
-    local row=CreateFrame("Frame",nil,window,"BackdropTemplate");row:SetPoint("TOPLEFT",16,-84-(i-1)*35);row:SetPoint("TOPRIGHT",-16,-84-(i-1)*35);row:SetHeight(34);row:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});row:SetBackdropColor(i%2==0 and .12 or .08,.12,.12,.95)
+    local row=CreateFrame("Frame",nil,window,"BackdropTemplate");row:SetPoint("TOPLEFT",16,-119-(i-1)*35);row:SetPoint("TOPRIGHT",-16,-119-(i-1)*35);row:SetHeight(34);row:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});row:SetBackdropColor(i%2==0 and .12 or .08,.12,.12,.95)
     row.check=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate");row.check:SetSize(25,25);row.check:SetPoint("LEFT",4,0)
     row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetSize(25,25);row.icon:SetPoint("LEFT",row.check,"RIGHT",5,0)
     row.name=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");row.name:SetPoint("LEFT",row.icon,"RIGHT",7,0);row.name:SetWidth(275);row.name:SetJustifyH("LEFT");row.name:SetWordWrap(false)
@@ -80,6 +92,7 @@ local function build()
       if not row.itemID then return end
       local excluded=excludedItems();excluded[tostring(row.itemID)]=self:GetChecked() and true or nil
       if core.RefreshBagValue then core.RefreshBagValue() end
+      if core.RefreshBagRules then core.RefreshBagRules() end
       render(true)
     end)
     row:EnableMouse(true);row:SetScript("OnEnter",function(self) if self.itemID and GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetItemByID(self.itemID);GameTooltip:Show() end end);row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
@@ -92,7 +105,7 @@ local function build()
   local function wheel(_,delta) offset=offset-delta;render(false) end
   window:EnableMouseWheel(true);window:SetScript("OnMouseWheel",wheel)
   for _,row in ipairs(rows) do row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",wheel) end
-  window:SetScript("OnShow",function() offset=0;render(true) end)
+  window:SetScript("OnShow",function() selectView("all") end)
   window:Hide()
 end
 function core.ShowBagExclusions()

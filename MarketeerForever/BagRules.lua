@@ -4,7 +4,7 @@ local dots=setmetatable({},{__mode="k"})
 local pending,window,rows,status=false,nil,{},nil
 local auctionOpen,merchantOpen=false,false
 local function markersVisible()
-  return not (MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagMarkersTradingOnly) or auctionOpen or merchantOpen
+  return not (MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagMarkersTradingOnly) or auctionOpen or merchantOpen or (IsShiftKeyDown and IsShiftKeyDown())
 end
 local defaults={{threshold=15,r=1,g=0,b=0},{threshold=10,r=1,g=1,b=0},{threshold=-1,r=0,g=1,b=0}}
 local function ruleMethod(rule)
@@ -48,9 +48,39 @@ local function vendorFor(id,link)
   if values[1] and type(values[12])=="number" then return values[12] end
   if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID,id) end
 end
-local function matchingRule(id,link)
+-- Only apply the vendor-only fallback when the actual bag stack can be
+-- verified as neither quest-related nor bound. Item IDs alone are not enough.
+local function vendorFallbackEligible(bag,slot)
+  local c=C_Container
+  if type(bag)~="number" or type(slot)~="number" or not c or not c.GetContainerItemInfo or not c.GetContainerItemQuestInfo then return false end
+  local info=c.GetContainerItemInfo(bag,slot)
+  if not info then return false end
+  local ok,quest=pcall(c.GetContainerItemQuestInfo,bag,slot)
+  if not ok or (quest and (quest.isQuestItem or quest.questID)) then return false end
+  if type(info.isBound)=="boolean" then return not info.isBound end
+  if not C_Item or not C_Item.IsBound or not ItemLocation or not ItemLocation.CreateFromBagAndSlot then return false end
+  local made,location=pcall(ItemLocation.CreateFromBagAndSlot,ItemLocation,bag,slot)
+  if not made or not location then return false end
+  local checked,bound=pcall(C_Item.IsBound,location)
+  return checked and bound==false
+end
+local function lowestVendorRule()
+  local lowest
+  for _,rule in ipairs(rules()) do
+    if type(rule.threshold)=="number" and ruleMethod(rule)=="vendor" and (not lowest or rule.threshold<lowest.threshold) then lowest=rule end
+  end
+  return lowest
+end
+local function matchingRule(id,link,bag,slot)
+  local excluded=MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagValueExclusions
+  if excluded and excluded[tostring(id)] then return nil end
   local ah,vendor=priceFor(id),vendorFor(id,link)
-  if type(ah)~="number" or ah<=0 or type(vendor)~="number" or vendor<=0 then return nil end
+  if type(vendor)~="number" or vendor<=0 then return nil end
+  if type(ah)~="number" or ah<=0 then
+    if not vendorFallbackEligible(bag,slot) then return nil end
+    return lowestVendorRule()
+  end
+  if vendor>ah then return lowestVendorRule() end
   local percent=(ah-vendor)*100/ah
   for _,rule in ipairs(rules()) do
     if type(rule.threshold)=="number" and percent>rule.threshold then return rule end
@@ -64,6 +94,7 @@ function core.BagRuleValue(item)
   ah=type(ah)=="number" and ah>0 and ah or nil
   vendor=type(vendor)=="number" and vendor>0 and vendor or nil
   if ah and vendor then
+    if vendor>ah then return vendor,"vendor" end
     local percent=(ah-vendor)*100/ah
     for _,rule in ipairs(rules()) do
       if type(rule.threshold)=="number" and percent>rule.threshold then
@@ -86,7 +117,7 @@ local function paint(button,bag,slot)
   end
   local info=C_Container and C_Container.GetContainerItemInfo and C_Container.GetContainerItemInfo(bag,slot)
   local id=info and (info.itemID or (info.hyperlink and tonumber(info.hyperlink:match("item:(%d+)"))))
-  local selected=id and matchingRule(id,info.hyperlink)
+  local selected=id and matchingRule(id,info.hyperlink,bag,slot)
   if not selected then if dot then dot:Hide() end;return end
   dot:SetColorTexture(selected.r or 1,selected.g or 1,selected.b or 1,1);dot:Show()
 end
@@ -139,6 +170,33 @@ local function paintFrame(frame)
     end
   end
 end
+-- ArkInventory reuses item buttons and may also show banks or offline bags.
+-- Remember its live bag buttons so normal refreshes (Shift, exclusions and
+-- trading visibility) can repaint them without waiting for a hover.
+local arkButtons=setmetatable({},{__mode="k"})
+local function paintArk(button,loc,arkBag,slot)
+  local dot=dots[button]
+  local ark=ArkInventory;local api=ark and ark.API;local locations=ark and ark.Const and ark.Const.Location
+  if not api or not locations or (loc~=locations.Bag and loc~=locations.ReagentBag) or not api.LocationIsOffline then if dot then dot:Hide() end;return end
+  local ok,offline=pcall(api.LocationIsOffline,loc)
+  if not ok or offline~=false or (button.IsVisible and not button:IsVisible()) then if dot then dot:Hide() end;return end
+  local bag=button.ARK_Data and button.ARK_Data.blizzard_id
+  if type(bag)~="number" and api.getBlizzardBagIdFromWindowId then local mapped,value=pcall(api.getBlizzardBagIdFromWindowId,loc,arkBag);if mapped then bag=value end end
+  local last=(Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag) or NUM_BAG_SLOTS or 4
+  if type(bag)~="number" or bag<0 or bag>last or type(slot)~="number" or slot<1 then if dot then dot:Hide() end;return end
+  pcall(paint,button,bag,slot)
+end
+local function refreshArk()
+  local api=ArkInventory and ArkInventory.API
+  if api and api.ItemFrameLoadedIterate then
+    pcall(function()
+      for _,button,loc,bag,slot in api.ItemFrameLoadedIterate() do
+        if button then arkButtons[button]={loc,bag,slot} end
+      end
+    end)
+  end
+  for button,data in pairs(arkButtons) do paintArk(button,data[1],data[2],data[3]) end
+end
 local function refresh()
   pending=false
   for _,dot in pairs(dots) do dot:Hide() end
@@ -154,6 +212,7 @@ local function refresh()
   if frame and frame.IsShown and frame:IsShown() then pcall(paintFrame,frame) end
   local ellesmere=_G.EUI_Bags or _G.EUI_MainBagFrame
   if ellesmere and ellesmere.IsShown and ellesmere:IsShown() then paintEllesmere(ellesmere._scrollChild,0) end
+  refreshArk()
   if Baganator and Baganator.API and Baganator.API.RequestItemButtonsRefresh then Baganator.API.RequestItemButtonsRefresh() end
 end
 local function schedule()
@@ -162,6 +221,16 @@ local function schedule()
   if C_Timer and C_Timer.After then C_Timer.After(.1,refresh) else refresh() end
 end
 core.RefreshBagRules=schedule
+local arkHooked=false
+local function setupArk()
+  local api=ArkInventory and ArkInventory.API
+  if arkHooked or not hooksecurefunc or not api or type(api.ItemFrameUpdated)~="function" then return end
+  hooksecurefunc(api,"ItemFrameUpdated",function(button,loc,bag,slot)
+    if not button then return end
+    arkButtons[button]={loc,bag,slot};paintArk(button,loc,bag,slot)
+  end)
+  arkHooked=true
+end
 local baganatorRegistered=false
 local baganatorViews=setmetatable({},{__mode="k"})
 local function hookBaganatorView(frame)
@@ -184,7 +253,10 @@ local function setupBaganator()
     if type(details)~="table" then return false end
     local link=details.itemLink;local id=details.itemID or (type(link)=="string" and tonumber(link:match("item:(%d+)")))
     if type(id)~="number" then return false end
-    local rule=matchingRule(id,link)
+    local location=details.itemLocation
+    local bag=location and location.bagID;local slot=location and (location.slotIndex or location.slotID)
+    if location and location.GetBagAndSlot and (type(bag)~="number" or type(slot)~="number") then local ok,b,s=pcall(location.GetBagAndSlot,location);if ok then bag,slot=b,s end end
+    local rule=matchingRule(id,link,bag,slot)
     if not rule then return false end
     texture:SetColorTexture(rule.r or 1,rule.g or 1,rule.b or 1,1);return true
   end,function(button)
@@ -234,13 +306,13 @@ local function buildWindow()
   if window then return end
   window=CreateFrame("Frame","MarketeerForeverBagRulesWindow",UIParent,"BackdropTemplate")
   core.RegisterEscapeFrame("MarketeerForeverBagRulesWindow")
-  window:SetSize(530,420);window:SetPoint("CENTER");window:SetFrameStrata("DIALOG");window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
+  window:SetSize(610,420);window:SetPoint("CENTER");window:SetFrameStrata("DIALOG");window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
   window:SetScript("OnDragStart",function(self) self:StartMoving() end);window:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
   window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,.98);window:SetBackdropBorderColor(.35,.42,.37,1)
   local title=window:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",16,-16);title:SetText("BAG SELLING RULES")
-  local note=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",16,-43);note:SetPoint("TOPRIGHT",-16,-43);note:SetJustifyH("LEFT");note:SetText("AH premium is the AH price minus vendor value, divided by the AH price. Example: AH 1g, vendor 50s = 50%. The highest matching rule wins.")
+  local note=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",16,-43);note:SetPoint("TOPRIGHT",-16,-43);note:SetJustifyH("LEFT");note:SetText("AH premium is the AH price minus vendor value, divided by the AH price. The highest matching rule wins. When vendor pays more, the lowest Vendor rule applies.")
   local tradingOnly=CreateFrame("CheckButton",nil,window,"UICheckButtonTemplate");tradingOnly:SetSize(24,24);tradingOnly:SetPoint("TOPLEFT",16,-77)
-  local tradingLabel=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");tradingLabel:SetPoint("LEFT",tradingOnly,"RIGHT",2,0);tradingLabel:SetText("Only show dots at the auction house or a vendor")
+  local tradingLabel=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");tradingLabel:SetPoint("LEFT",tradingOnly,"RIGHT",2,0);tradingLabel:SetText("Only show dots at the auction house or vendor (hold Shift to show)")
   tradingOnly:SetScript("OnClick",function(self) MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.bagMarkersTradingOnly=self:GetChecked() and true or false;schedule() end)
   for i=1,6 do
     local row={};rows[i]=row
@@ -261,10 +333,14 @@ local function buildWindow()
     row.color=CreateFrame("Button",nil,window,"BackdropTemplate");row.color:SetSize(27,24);row.color:SetPoint("TOPLEFT",375,y);row.color:SetBackdrop({edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});row.color:SetBackdropBorderColor(.8,.8,.8,1)
     row.swatch=row.color:CreateTexture(nil,"ARTWORK");row.swatch:SetPoint("TOPLEFT",2,-2);row.swatch:SetPoint("BOTTOMRIGHT",-2,2)
     row.color:SetScript("OnClick",function() chooseColor(row) end)
-    row.remove=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");row.remove:SetSize(80,24);row.remove:SetPoint("TOPLEFT",425,y);row.remove:SetText("Remove")
+    row.junk=CreateFrame("CheckButton",nil,window,"UICheckButtonTemplate");row.junk:SetSize(24,24);row.junk:SetPoint("TOPLEFT",410,y)
+    local junkLabel=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");junkLabel:SetPoint("LEFT",row.junk,"RIGHT",0,0);junkLabel:SetText("Junk")
+    row.junk:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_TOP");GameTooltip:SetText("Mark as junk");GameTooltip:AddLine("Items matching this rule can be sold using Marketeer's Sell junk button at a vendor. Excluded and quest items are skipped.",1,1,1,true);GameTooltip:Show() end end)
+    row.junk:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+    row.remove=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");row.remove:SetSize(80,24);row.remove:SetPoint("TOPLEFT",505,y);row.remove:SetText("Remove")
     row.remove:SetScript("OnClick",function()
-      for n=i,5 do local nextRow=rows[n+1];local dest=rows[n];dest.threshold:SetText(nextRow.threshold:GetText());dest.r,dest.g,dest.b=nextRow.r,nextRow.g,nextRow.b;dest.saleMethod=nextRow.saleMethod;dest.method:SetText((dest.saleMethod=="auction" and "AH" or "Vendor").."  v");dest.methodMenu:Hide();dest.swatch:SetColorTexture(dest.r,dest.g,dest.b,1) end
-      local last=rows[6];last.threshold:SetText("");last.r,last.g,last.b=1,1,1;last.saleMethod="vendor";last.method:SetText("Vendor  v");last.methodMenu:Hide();last.swatch:SetColorTexture(1,1,1,1)
+      for n=i,5 do local nextRow=rows[n+1];local dest=rows[n];dest.threshold:SetText(nextRow.threshold:GetText());dest.r,dest.g,dest.b=nextRow.r,nextRow.g,nextRow.b;dest.saleMethod=nextRow.saleMethod;dest.junk:SetChecked(nextRow.junk:GetChecked());dest.method:SetText((dest.saleMethod=="auction" and "AH" or "Vendor").."  v");dest.methodMenu:Hide();dest.swatch:SetColorTexture(dest.r,dest.g,dest.b,1) end
+      local last=rows[6];last.threshold:SetText("");last.r,last.g,last.b=1,1,1;last.saleMethod="vendor";last.junk:SetChecked(false);last.method:SetText("Vendor  v");last.methodMenu:Hide();last.swatch:SetColorTexture(1,1,1,1)
     end)
   end
   status=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");status:SetPoint("BOTTOMLEFT",20,49);status:SetWidth(490);status:SetJustifyH("LEFT")
@@ -278,7 +354,7 @@ local function buildWindow()
         if not threshold or threshold < -9900 or threshold>100 then status:SetText("Enter a percentage from -9900 to 100.");return end
         if seen[threshold] then status:SetText("Each percentage must be different.");return end
         seen[threshold]=true
-        nextRules[#nextRules+1]={threshold=threshold,r=row.r,g=row.g,b=row.b,method=row.saleMethod or "vendor"}
+        nextRules[#nextRules+1]={threshold=threshold,r=row.r,g=row.g,b=row.b,method=row.saleMethod or "vendor",junk=row.junk:GetChecked() and true or false}
       end
     end
     table.sort(nextRules,function(a,b) return a.threshold>b.threshold end)
@@ -291,7 +367,7 @@ local function buildWindow()
   window:SetScript("OnShow",function()
     local saved=rules()
     tradingOnly:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagMarkersTradingOnly==true)
-    for i,row in ipairs(rows) do local rule=saved[i];row.threshold:SetText(rule and tostring(rule.threshold) or "");row.r,row.g,row.b=rule and rule.r or 1,rule and rule.g or 1,rule and rule.b or 1;row.saleMethod=rule and ruleMethod(rule) or "vendor";row.method:SetText((row.saleMethod=="auction" and "AH" or "Vendor").."  v");row.methodMenu:Hide();row.swatch:SetColorTexture(row.r,row.g,row.b,1) end
+    for i,row in ipairs(rows) do local rule=saved[i];row.threshold:SetText(rule and tostring(rule.threshold) or "");row.r,row.g,row.b=rule and rule.r or 1,rule and rule.g or 1,rule and rule.b or 1;row.saleMethod=rule and ruleMethod(rule) or "vendor";row.junk:SetChecked(rule and rule.junk==true);row.method:SetText((row.saleMethod=="auction" and "AH" or "Vendor").."  v");row.methodMenu:Hide();row.swatch:SetColorTexture(row.r,row.g,row.b,1) end
     status:SetText("Each rule chooses AH or vendor for bag value. AH cut, binding and deposits are not included.")
   end)
   window:Hide()
@@ -300,16 +376,81 @@ function core.ToggleBagRules()
   buildWindow()
   if window:IsShown() then window:Hide() else window:Show() end
 end
+-- The vendor button only processes the specific stacks present when clicked.
+-- Recheck each slot before selling: bags and prices can change while it runs.
+local junkButton,sellingJunk,merchantSession=nil,false,0
+local function junkCandidate(bag,slot)
+  local c=C_Container
+  if not c or not c.GetContainerItemInfo or not c.GetContainerItemQuestInfo then return nil end
+  local info=c.GetContainerItemInfo(bag,slot)
+  if not info or info.isLocked then return nil end
+  local quest=c.GetContainerItemQuestInfo(bag,slot)
+  if quest and (quest.isQuestItem or quest.questID) then return nil end
+  local id=info.itemID or (info.hyperlink and tonumber(info.hyperlink:match("item:(%d+)")))
+  local rule=id and matchingRule(id,info.hyperlink,bag,slot)
+  if not rule or not rule.junk then return nil end
+  return {bag=bag,slot=slot,id=id,link=info.hyperlink,count=info.stackCount or 1}
+end
+local function sellJunk()
+  if sellingJunk or not merchantOpen or not MerchantFrame or not MerchantFrame:IsShown() then return end
+  if (InCombatLockdown and InCombatLockdown()) or (CursorHasItem and CursorHasItem()) then print("Marketeer: Close combat and clear your cursor before selling junk.");return end
+  local c=C_Container
+  if not c or not c.GetContainerNumSlots or not c.UseContainerItem then return end
+  local list={};local last=(Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag) or NUM_BAG_SLOTS or 4
+  for bag=0,last do for slot=1,(c.GetContainerNumSlots(bag) or 0) do local item=junkCandidate(bag,slot);if item then list[#list+1]=item end end end
+  if #list==0 then print("Marketeer: No eligible junk stacks found.");return end
+  sellingJunk=true;junkButton:Disable();local index,confirmed,skipped,session=0,0,0,merchantSession
+  local function step()
+    if session~=merchantSession or not merchantOpen or not MerchantFrame:IsShown() or (InCombatLockdown and InCombatLockdown()) or (CursorHasItem and CursorHasItem()) then sellingJunk=false;junkButton:Enable();print("Marketeer: Junk selling stopped.");return end
+    index=index+1;local original=list[index]
+    if not original then sellingJunk=false;junkButton:Enable();print("Marketeer: "..confirmed.." junk stacks cleared; "..skipped.." not sold or changed. Check vendor buyback and remaining bags.");return end
+    local attempts,polls=0,0
+    local function trySale()
+      if session~=merchantSession or not merchantOpen or not MerchantFrame:IsShown() or (InCombatLockdown and InCombatLockdown()) or (CursorHasItem and CursorHasItem()) then sellingJunk=false;junkButton:Enable();print("Marketeer: Junk selling stopped.");return end
+      local info=c.GetContainerItemInfo(original.bag,original.slot)
+      local id=info and (info.itemID or (info.hyperlink and tonumber(info.hyperlink:match("item:(%d+)"))))
+      if not info or id~=original.id or info.hyperlink~=original.link or (info.stackCount or 1)~=original.count then
+        if attempts>0 then confirmed=confirmed+1 else skipped=skipped+1 end;step();return
+      end
+      if polls>=15 then skipped=skipped+1;step();return end
+      if not info.isLocked and polls%5==0 then
+        local current=junkCandidate(original.bag,original.slot)
+        if not current then skipped=skipped+1;step();return end
+        local ok=pcall(c.UseContainerItem,original.bag,original.slot)
+        if not ok then sellingJunk=false;junkButton:Enable();print("Marketeer: Junk selling stopped because the game blocked the action.");return end
+        attempts=attempts+1
+      end
+      polls=polls+1
+      C_Timer.After(.15,trySale)
+    end
+    trySale()
+  end
+  if not C_Timer or not C_Timer.After then sellingJunk=false;junkButton:Enable();print("Marketeer: Junk selling is unavailable on this client.");return end
+  step()
+end
+local function showJunkButton()
+  if not MerchantFrame then return end
+  if not junkButton then
+    junkButton=CreateFrame("Button",nil,UIParent,"UIPanelButtonTemplate");junkButton:SetSize(100,24);junkButton:SetFrameStrata("DIALOG")
+    if MerchantFrameTab2 then junkButton:SetPoint("LEFT",MerchantFrameTab2,"RIGHT",8,0) else junkButton:SetPoint("TOPLEFT",MerchantFrame,"BOTTOMLEFT",210,-3) end
+    junkButton:SetText("Sell junk")
+    junkButton:SetScript("OnClick",sellJunk)
+    junkButton:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Sell Marketeer junk");GameTooltip:AddLine("Sell bag stacks matching rules checked as junk. Excluded and quest items are skipped.",1,1,1,true);GameTooltip:Show() end end)
+    junkButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+  end
+  junkButton:Show()
+end
 local events=CreateFrame("Frame")
-for _,event in ipairs({"PLAYER_LOGIN","ADDON_LOADED","BAG_UPDATE_DELAYED","GET_ITEM_INFO_RECEIVED","PLAYER_REGEN_ENABLED","AUCTION_HOUSE_SHOW","AUCTION_HOUSE_CLOSED","MERCHANT_SHOW","MERCHANT_CLOSED"}) do events:RegisterEvent(event) end
-events:SetScript("OnEvent",function(_,event)
+for _,event in ipairs({"PLAYER_LOGIN","ADDON_LOADED","BAG_UPDATE_DELAYED","GET_ITEM_INFO_RECEIVED","PLAYER_REGEN_ENABLED","AUCTION_HOUSE_SHOW","AUCTION_HOUSE_CLOSED","MERCHANT_SHOW","MERCHANT_CLOSED","MODIFIER_STATE_CHANGED"}) do events:RegisterEvent(event) end
+events:SetScript("OnEvent",function(_,event,key)
+  if event=="MODIFIER_STATE_CHANGED" and key~="LSHIFT" and key~="RSHIFT" then return end
   if event=="PLAYER_LOGIN" or event=="ADDON_LOADED" then
-    hookFrames();setupBaganator()
-    if event=="PLAYER_LOGIN" then auctionOpen=AuctionHouseFrame and AuctionHouseFrame.IsShown and AuctionHouseFrame:IsShown() or false;merchantOpen=MerchantFrame and MerchantFrame.IsShown and MerchantFrame:IsShown() or false end
+    hookFrames();setupBaganator();setupArk()
+    if event=="PLAYER_LOGIN" then auctionOpen=AuctionHouseFrame and AuctionHouseFrame.IsShown and AuctionHouseFrame:IsShown() or false;merchantOpen=MerchantFrame and MerchantFrame.IsShown and MerchantFrame:IsShown() or false;if merchantOpen then showJunkButton() end end
   elseif event=="AUCTION_HOUSE_SHOW" then auctionOpen=true
   elseif event=="AUCTION_HOUSE_CLOSED" then auctionOpen=false
-  elseif event=="MERCHANT_SHOW" then merchantOpen=true
-  elseif event=="MERCHANT_CLOSED" then merchantOpen=false end
+  elseif event=="MERCHANT_SHOW" then merchantOpen=true;showJunkButton()
+  elseif event=="MERCHANT_CLOSED" then merchantOpen=false;merchantSession=merchantSession+1;if junkButton then junkButton:Hide() end end
   schedule()
 end)
 core.Subscribe(schedule)
