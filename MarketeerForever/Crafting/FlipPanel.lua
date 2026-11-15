@@ -4,6 +4,7 @@ local CRAFT_TAB_ID = "MarketeerForeverCraftCrafting"
 local applyMode
 local panel, tabLib, budgetBox, minSalesBox, minStackProfitBox, searchBox, sortButton, status, pageText, detailTitle, detailBody
 local rows, results, filtered = {}, {}, {}
+local selectedItem,materialPopup,materialTitle,materialRows,materialsButton,dropsButton
 local scrollOffset, sortMode, selectedID = 0, "gain", nil
 local scrollbar, updatingScrollbar
 local viewMode, modeButton, headerTexts, flipControls, title, subtitle = "lookup", nil, {}, {}, nil, nil
@@ -48,6 +49,10 @@ local function makeText(parent, anchor, x, y, width, font)
   return text
 end
 local function setSelected(item)
+  selectedItem=item
+  if materialPopup and materialPopup:IsShown() then materialPopup:Hide() end
+  if materialsButton then materialsButton:SetShown(viewMode=="craft" and item and item.recipe~=nil) end
+  if dropsButton then local saved=item and MarketeerForeverFarmLookup and MarketeerForeverFarmLookup.items[item.id];dropsButton:SetShown(saved and (#saved.drops+#(saved.sources or {}))>0) end
   selectedID = item and (item.key or item.id) or nil
   if not item then
     detailTitle:SetText("SELECT AN ITEM")
@@ -266,7 +271,7 @@ local function calculate()
   MarketeerForeverCraftDB.flipMinPackProfitSilver=minPackSilver or ""
   MarketeerForeverCraftDB.flipBudgetSilver=silver or ""
   MarketeerForeverCraftDB.flipMinSalesPerDay=minSales or ""
-  local budget=silver and math.floor(silver*100) or nil
+  local budget=silver and silver>0 and math.floor(silver*100) or nil
   local priceByItem={}
   for _,row in ipairs(scan.rows) do
     if row.itemID and (row.itemSuffix or 0)==0 and (row.battlePetSpeciesID or 0)==0 and type(row.price)=="number" and row.price>0 then
@@ -329,7 +334,7 @@ local function createPanel()
   updateControls()
   subtitle=makeText(panel,nil,16,-33,680,"GameFontHighlightSmall");subtitle:SetText("One-pack vendor cost vs sell price per unit. Enter filters; select a row for details.")
   local budgetLabel=makeText(panel,nil,18,-59,85,"GameFontNormalSmall");budgetLabel:SetText("MAX (SILVER)")
-  budgetBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");budgetBox:SetSize(50,24);budgetBox:SetPoint("TOPLEFT",panel,"TOPLEFT",105,-54);budgetBox:SetAutoFocus(false);budgetBox:SetNumeric(true);budgetBox:SetFontObject("GameFontHighlight");budgetBox:SetText(tostring((MarketeerForeverCraftDB and MarketeerForeverCraftDB.flipBudgetSilver) or 15))
+  budgetBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");budgetBox:SetSize(50,24);budgetBox:SetPoint("TOPLEFT",panel,"TOPLEFT",105,-54);budgetBox:SetAutoFocus(false);budgetBox:SetNumeric(true);budgetBox:SetFontObject("GameFontHighlight");budgetBox:SetText(tostring(tonumber(MarketeerForeverCraftDB and MarketeerForeverCraftDB.flipBudgetSilver) or 0))
   budgetBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);budgetBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
   local minLabel=makeText(panel,nil,170,-59,90,"GameFontNormalSmall");minLabel:SetText("MIN EST./DAY")
   minSalesBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");minSalesBox:SetSize(48,24);minSalesBox:SetPoint("TOPLEFT",panel,"TOPLEFT",260,-54);minSalesBox:SetAutoFocus(false);minSalesBox:SetFontObject("GameFontHighlight");minSalesBox:SetText(tostring((MarketeerForeverCraftDB and MarketeerForeverCraftDB.flipMinSalesPerDay) or 1));minSalesBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);minSalesBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
@@ -371,6 +376,31 @@ local function createPanel()
   pageText=makeText(panel,nil,18,-391,450,"GameFontHighlightSmall")
   detailTitle=makeText(panel,nil,18,-416,850,"GameFontNormalSmall")
   detailBody=makeText(panel,nil,18,-432,850,"GameFontHighlightSmall");detailBody:SetWordWrap(true)
+  materialsButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");materialsButton:SetSize(100,23);materialsButton:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-128,-408);materialsButton:SetText("Materials");materialsButton:Hide()
+  dropsButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");dropsButton:SetSize(100,23);dropsButton:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-20,-408);dropsButton:SetText("Find sources");dropsButton:Hide()
+  dropsButton:SetScript("OnClick",function()if selectedItem and MarketeerForeverCore.ShowItemDrops then MarketeerForeverCore.ShowItemDrops(selectedItem.id) end end)
+  materialPopup=CreateFrame("Frame",nil,panel,"BackdropTemplate");materialPopup:SetSize(480,270);materialPopup:SetPoint("CENTER",panel,"CENTER",0,0);materialPopup:SetFrameLevel(panel:GetFrameLevel()+30);materialPopup:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});materialPopup:SetBackdropColor(.055,.075,.065,.99);materialPopup:SetBackdropBorderColor(.25,.48,.34,1);materialPopup:EnableMouse(true);materialPopup:Hide()
+  materialTitle=makeText(materialPopup,nil,15,-14,400,"GameFontNormal")
+  local closeMaterials=CreateFrame("Button",nil,materialPopup,"UIPanelButtonTemplate");closeMaterials:SetSize(26,22);closeMaterials:SetPoint("TOPRIGHT",materialPopup,"TOPRIGHT",-8,-8);closeMaterials:SetText("X");closeMaterials:SetScript("OnClick",function()materialPopup:Hide()end)
+  makeText(materialPopup,nil,15,-40,440,"GameFontHighlightSmall"):SetText("Materials per craft. Find sources opens recorded item sources.")
+  materialRows={}
+  for i=1,8 do
+    local row=CreateFrame("Frame",nil,materialPopup);row:SetPoint("TOPLEFT",materialPopup,"TOPLEFT",14,-60-(i-1)*23);row:SetSize(450,22)
+    row.name=makeText(row,nil,2,-4,310,"GameFontHighlightSmall")
+    row.drops=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.drops:SetSize(100,21);row.drops:SetPoint("RIGHT",row,"RIGHT",0,0);row.drops:SetText("Find sources")
+    row.drops:SetScript("OnClick",function()if row.itemID and MarketeerForeverCore.ShowItemDrops then MarketeerForeverCore.ShowItemDrops(row.itemID) end end);materialRows[i]=row
+  end
+  materialsButton:SetScript("OnClick",function()
+    if not selectedItem or not selectedItem.recipe then return end
+    if materialPopup:IsShown() then materialPopup:Hide();return end
+    materialTitle:SetText(selectedItem.recipe.name.." | materials")
+    for i,row in ipairs(materialRows) do local m=selectedItem.recipe.materials[i];if m then
+      local saved=MarketeerForeverFarmLookup and MarketeerForeverFarmLookup.items[m.id]
+      local name=(GetItemInfo and GetItemInfo(m.id)) or (saved and saved.name) or m.name or ("Item #"..m.id)
+      row.itemID=m.id;row.name:SetText(tostring(m.quantity).." x "..name);row.drops:SetEnabled(saved and (#saved.drops+#(saved.sources or {}))>0 or false);row:Show()
+    else row.itemID=nil;row:Hide() end end
+    materialPopup:Show()
+  end)
   flipControls={budgetLabel,budgetBox,minLabel,minSalesBox,minProfitLabel,minStackProfitBox,sortButton}
   modeButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");modeButton:SetSize(125,22);modeButton:SetPoint("TOPLEFT",panel,"TOPLEFT",220,-77)
   knownButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");knownButton:SetSize(125,22);knownButton:SetPoint("TOPLEFT",panel,"TOPLEFT",335,-77)
@@ -419,13 +449,13 @@ local function createPanel()
     minProfitLabel:SetText(craft and "MIN CRAFT GAIN (S)" or "MIN PACK GAIN (S)")
     sortButton:SetText("Sort: "..(craft and sortMode=="gain" and "Gain per craft" or sortLabels[sortMode]))
     local craftBudget=tonumber(MarketeerForeverCraftDB.craftBudgetSilver) or 0
-    budgetBox:SetText(tostring(craft and craftBudget or (MarketeerForeverCraftDB.flipBudgetSilver or 15)))
+    budgetBox:SetText(tostring(craft and craftBudget or (tonumber(MarketeerForeverCraftDB.flipBudgetSilver) or 0)))
     minSalesBox:SetText(tostring(craft and (tonumber(MarketeerForeverCraftDB.craftMinSales) or 0) or (MarketeerForeverCraftDB.flipMinSalesPerDay or 1)))
-    minStackProfitBox:SetText(tostring(craft and (tonumber(MarketeerForeverCraftDB.craftMinProfit) or 0) or (MarketeerForeverCraftDB.flipMinPackProfitSilver or 0)))
+    minStackProfitBox:SetText(tostring(craft and (tonumber(MarketeerForeverCraftDB.craftMinProfit) or 0) or (tonumber(MarketeerForeverCraftDB.flipMinPackProfitSilver) or 0)))
     modeButton:SetShown(not craft)
     modeButton:SetText(lookup and "Vendor flips" or "Item lookup")
     title:SetText(lookup and "ITEM LOOKUP" or craft and "CRAFTING PROFIT" or "VENDOR FLIP FINDER")
-    subtitle:SetText(lookup and "Search loaded items by name, vendor or ID." or craft and "AH material costs; profit per craft. Max 0 means no limit. Capture recipes with a profession open." or "One-pack vendor cost vs sell price per unit. Select a row for details.")
+    subtitle:SetText(lookup and "Search loaded items by name, vendor or ID." or craft and "AH material costs; profit per craft. Max 0 means no limit. Capture recipes with a profession open." or "One-pack vendor cost vs sell price. Max 0 means no limit.")
     local labels=lookup and {"ITEM / VARIANT","VENDOR / UNIT","AH LOW / UNIT","LISTED","VENDOR PACK","EST. / DAY","",""} or craft and {"RECIPE / PROFESSION","COST / CRAFT","SELL / UNIT","GAIN / CRAFT","YIELD","EST. / DAY","LISTED","GAP"} or {"ITEM / VENDOR","BUY / UNIT","SELL / UNIT","GAIN / UNIT","GAIN / PACK","ACTIVITY","",""}
     for i,label in ipairs(labels) do headerTexts[i]:SetText(label) end
     calculate()
@@ -448,7 +478,7 @@ function MarketeerForeverCraftExplainItem(id)
   print("Market Crafting: item " .. id .. "; last scan low " .. copper(lowest) .. "; proposed sale " .. copper(sell) .. "; listed " .. tostring(quantity or "unknown") .. "; est/day " .. tostring(remote and remote.sales or "unknown") .. ".")
   if sell<1 then print("Market Crafting: no valid positive sale price.");return end
   local budget=tonumber(MarketeerForeverCraftDB.flipBudgetSilver)
-  if budget then budget=budget*100 end
+  if budget and budget>0 then budget=budget*100 else budget=nil end
   local minimum=tonumber(MarketeerForeverCraftDB.flipMinSalesPerDay) or 0
   local offers=0
   for _,offer in ipairs(MarketeerForeverCraftVendorData or {}) do

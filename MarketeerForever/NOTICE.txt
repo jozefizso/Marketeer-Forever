@@ -2,6 +2,10 @@ Marketeer Forever - third-party data notices
 
 Market prices and activity: AHledger (https://ahledger.com/).
 
+Monster drops, item sources, locations, and observed drop rates: Wowhead
+(https://www.wowhead.com/forever). Bundled as an incomplete snapshot;
+some observed rates use Classic Era fallback data.
+
 Vendor observations and crafting skill observations: Efficient Games,
 https://efficient.games/ and https://github.com/JIVESCORP/eg-link-output-wowf,
 licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/).

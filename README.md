@@ -1,5 +1,7 @@
 # Marketeer Forever
 
+Interface development rule: table and card headers must align with their corresponding data columns at every supported window size. Define shared column positions or widths for headers and rows, and check the smallest and resized layouts whenever either changes.
+
 Market, crafting, auction tracking, bag tools, and price trends for World of Warcraft: Forever. The in-game interface is branded **Marketeer** and the addon folder is `MarketeerForever`.
 
 Install `MarketeerForever` using [CurseForge](https://www.curseforge.com/wow/addons/marketeer-forever) or place the addon folder in the client's `Interface/AddOns` folder. For market data, download the [Windows Marketeer Forever Data Updater](https://github.com/PyNoki/Marketeer-Forever/releases/latest/download/Marketeer-Forever-Data-Updater.exe), run it, select your addon folder and market, and choose **Update now**. It creates the separate `MarketeerForeverData` addon; enable it in the AddOns list and use `/reload` after refreshing. The updater only refreshes data; CurseForge updates the main addon. Prices from [AHledger](https://ahledger.com/).
@@ -10,4 +12,6 @@ If upgrading from `NokiTrading`, close WoW before first launching the renamed ad
 
 `Server/` contains the market trend collector, retention and export code. `Versions/` holds release packages, including older Noki Trading and beta releases in `Versions/Legacy/`. The legacy archives can contain the old addon updater; use the current updater instead. The Marketeer 1.0.70 ZIP is the original CurseForge upload.
 
-The farming feature has been removed from the active addon. Its recovered code and data are preserved separately in the `archive/farming-1.0.81` Git branch.
+The Marketeer widget **Farm** tab ranks monsters at or below a chosen maximum level. It uses the latest completed scan for prices and the updater's market-matched estimated sales per day for demand. Value per kill is the sum of observed drop chances times scan prices, assuming one item per drop. The score is a 0–100 relative ranking against the highest-scoring eligible monster at the selected maximum level. It uses a conservative lower confidence bound on the displayed drop chance, weights market sales volume by min(sales/day ÷ 300, 1), without considering competing listings, and applies a 5% auction cut. It excludes drops with fewer than 20 observations or missing demand; coverage shows how many drops contributed. Zero sales count as zero score, while unknown demand stays unknown. These are incomplete estimates, not guaranteed sales or profit; drops outside the AH item snapshot, quantity variation, deposits, repair costs and travel are excluded. Classic Era fallback rates are marked with an asterisk.
+
+Use the widget's **Find drops** tab to search captured item drop tables by item name or ID. Results include recorded monster names, levels, locations, rates and sample counts; unknown fields are shown as unknown. The saved snapshot is incomplete and Classic Era fallback rates are marked.

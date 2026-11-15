@@ -321,7 +321,7 @@ local function calculate()
       status:SetText("Enter non-negative filters; max spend may be blank.");filterAndSort();return
     end
     MarketeerForeverMarketDB.craftBudgetSilver=budgetBox:GetText();MarketeerForeverMarketDB.craftMinSales=sales;MarketeerForeverMarketDB.craftMinProfit=gain
-    local found,err,stats=MarketeerForeverMarketCraftCandidates(gain,sales,true,MarketeerForeverMarketDB.craftKnownOnly==true,budget and budget*100 or nil)
+    local found,err,stats=MarketeerForeverMarketCraftCandidates(gain,sales,true,MarketeerForeverMarketDB.craftKnownOnly==true,budget and budget>0 and budget*100 or nil)
     if err then status:SetText(err);filterAndSort();return end
     for _,item in ipairs(found) do
       item.id=item.recipe.output;item.key=tostring(item.recipe.id);item.name=item.recipe.name;item.vendor=item.recipe.profession
@@ -348,7 +348,7 @@ local function calculate()
   MarketeerForeverMarketDB.flipMinPackProfitSilver=minPackSilver or ""
   MarketeerForeverMarketDB.flipBudgetSilver=silver or ""
   MarketeerForeverMarketDB.flipMinSalesPerDay=minSales or ""
-  local budget=silver and math.floor(silver*100) or nil
+  local budget=silver and silver>0 and math.floor(silver*100) or nil
   local priceByItem,variants={},{ }
   for _,row in ipairs(scan.rows) do
     if row.itemID and ((row.itemSuffix or 0)~=0 or (row.battlePetSpeciesID or 0)~=0) then variants[row.itemID]=false end
@@ -497,7 +497,7 @@ local function createPanel()
   updateControls()
   subtitle=makeText(panel,nil,16,-33,680,"GameFontHighlightSmall");subtitle:SetText("One-pack vendor cost vs sell price per unit. Enter filters; select a row for details.")
   local budgetLabel=makeText(panel,nil,18,-59,85,"GameFontNormalSmall");budgetLabel:SetText("MAX (SILVER)")
-  budgetBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");budgetBox:SetSize(50,24);budgetBox:SetPoint("TOPLEFT",panel,"TOPLEFT",105,-54);budgetBox:SetAutoFocus(false);budgetBox:SetNumeric(true);budgetBox:SetFontObject("GameFontHighlight");budgetBox:SetText(tostring((MarketeerForeverMarketDB and MarketeerForeverMarketDB.flipBudgetSilver) or 15))
+  budgetBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");budgetBox:SetSize(50,24);budgetBox:SetPoint("TOPLEFT",panel,"TOPLEFT",105,-54);budgetBox:SetAutoFocus(false);budgetBox:SetNumeric(true);budgetBox:SetFontObject("GameFontHighlight");budgetBox:SetText(tostring(tonumber(MarketeerForeverMarketDB and MarketeerForeverMarketDB.flipBudgetSilver) or 0))
   budgetBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);budgetBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
   local minLabel=makeText(panel,nil,170,-59,90,"GameFontNormalSmall");minLabel:SetText("MIN EST./DAY")
   minSalesBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");minSalesBox:SetSize(48,24);minSalesBox:SetPoint("TOPLEFT",panel,"TOPLEFT",260,-54);minSalesBox:SetAutoFocus(false);minSalesBox:SetFontObject("GameFontHighlight");minSalesBox:SetText(tostring((MarketeerForeverMarketDB and MarketeerForeverMarketDB.flipMinSalesPerDay) or 1));minSalesBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);minSalesBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
@@ -578,13 +578,13 @@ local function createPanel()
     knownButton:SetText(MarketeerForeverMarketDB.craftKnownOnly and "Known only" or "All recipes")
     minProfitLabel:SetText(craft and "MIN CRAFT GAIN (S)" or "MIN PACK GAIN (S)")
     sortButton:SetText("Sort: "..(craft and sortMode=="gain" and "Gain per craft" or sortLabels[sortMode]))
-    budgetBox:SetText(tostring(craft and (MarketeerForeverMarketDB.craftBudgetSilver or "") or (MarketeerForeverMarketDB.flipBudgetSilver or 15)))
+    budgetBox:SetText(tostring(craft and (tonumber(MarketeerForeverMarketDB.craftBudgetSilver) or 0) or (tonumber(MarketeerForeverMarketDB.flipBudgetSilver) or 0)))
     minSalesBox:SetText(tostring(craft and (MarketeerForeverMarketDB.craftMinSales or 1) or (MarketeerForeverMarketDB.flipMinSalesPerDay or 1)))
-    minStackProfitBox:SetText(tostring(craft and (MarketeerForeverMarketDB.craftMinProfit or 0) or (MarketeerForeverMarketDB.flipMinPackProfitSilver or 0)))
+    minStackProfitBox:SetText(tostring(craft and (tonumber(MarketeerForeverMarketDB.craftMinProfit) or 0) or (tonumber(MarketeerForeverMarketDB.flipMinPackProfitSilver) or 0)))
     modeButton:SetShown(not craft)
     modeButton:SetText(lookup and "Vendor flips" or resale and "Item lookup" or "Vendor resale")
     title:SetText(lookup and "ITEM LOOKUP" or resale and "SELL TO VENDOR" or craft and "CRAFTING PROFIT" or "VENDOR FLIP FINDER")
-    subtitle:SetText(lookup and "Search loaded items by name, vendor or ID." or resale and "Automatically checks all listings priced below each item's vendor value." or craft and "Buy materials at AH lows; profit is per craft. Capture recipes with a profession open." or "One-pack vendor cost vs sell price per unit. Select a row for details.")
+    subtitle:SetText(lookup and "Search loaded items by name, vendor or ID." or resale and "Automatically checks all listings priced below each item's vendor value." or craft and "AH material costs and profit per craft. Max 0 means no limit." or "One-pack vendor cost vs sell price. Max 0 means no limit.")
     local labels=resale and {"ITEM","AH / UNIT","VENDOR / UNIT","GAIN / UNIT","BUY QTY","BUY TOTAL","PROFIT TOTAL","VIEW"} or lookup and {"ITEM / VARIANT","VENDOR / UNIT","AH LOW / UNIT","LISTED","VENDOR PACK","EST. / DAY","","GAP"} or craft and {"RECIPE / PROFESSION","COST / CRAFT","SELL / UNIT","GAIN / CRAFT","YIELD","EST. / DAY","",""} or {"ITEM / VENDOR","BUY / UNIT","SELL / UNIT","GAIN / UNIT","GAIN / PACK","EST. / DAY","LISTED","GAP"}
     for i,label in ipairs(labels) do headerTexts[i]:SetText(label) end
     if preserveResale then render() else calculate() end
@@ -616,7 +616,7 @@ function MarketeerForeverMarketExplainItem(id)
   print("Market Vision: item " .. id .. "; last scan low " .. copper(lowest) .. "; proposed sale " .. copper(sell) .. "; listed " .. tostring(quantity or "unknown") .. "; est/day " .. tostring(remote and remote.sales or "unknown") .. ".")
   if sell<1 then print("Market Vision: no valid positive sale price.");return end
   local budget=tonumber(MarketeerForeverMarketDB.flipBudgetSilver)
-  if budget then budget=budget*100 end
+  if budget and budget>0 then budget=budget*100 else budget=nil end
   local minimum=tonumber(MarketeerForeverMarketDB.flipMinSalesPerDay) or 0
   local offers=0
   for _,offer in ipairs(MarketeerForeverMarketVendorData or {}) do

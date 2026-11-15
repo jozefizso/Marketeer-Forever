@@ -50,13 +50,21 @@ local function schedule()
   if C_Timer and C_Timer.After then C_Timer.After(0,refresh) else refresh() end
 end
 core.RefreshBagValue=schedule
+-- Re-anchoring a protected Blizzard bag frame can interfere with protected
+-- item actions, even when the move starts outside combat. Leave such frames
+-- under Blizzard's control; saved positions remain available for unprotected
+-- frames. If protection cannot be determined, do not move the frame.
+local function canMoveBags(bags)
+  if not bags or type(bags.IsProtected)~="function" then return false end
+  local ok,protected=pcall(bags.IsProtected,bags)
+  return ok and protected==false
+end
 local function restorePosition()
   local bags=_G.ContainerFrameCombinedBags
   local pos=MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagPosition
   if not bags or not pos or type(pos.x)~="number" or type(pos.y)~="number" then return end
   -- Blizzard can lay the combined bags out again when they are reopened.
-  -- Restore the saved position in combat only when the frame is unprotected.
-  if InCombatLockdown and InCombatLockdown() and (not bags.IsProtected or bags:IsProtected()) then return end
+  if not canMoveBags(bags) then return end
   local x,y=pos.x,pos.y
   -- Older releases saved coordinates in UIParent units.
   if pos.version~=2 then local scale=bags:GetEffectiveScale()/UIParent:GetEffectiveScale();x,y=x/scale,y/scale end
@@ -66,6 +74,7 @@ end
 local function updateDrag(self)
   if not self.dragging or (InCombatLockdown and InCombatLockdown()) then return end
   local bags=self:GetParent()
+  if not canMoveBags(bags) then return end
   local scale=bags:GetEffectiveScale()
   local x,y=GetCursorPosition()
   x=x/scale-self.dragOffsetX;y=y/scale-self.dragOffsetY
@@ -153,6 +162,7 @@ local function setup()
   display:RegisterForDrag("LeftButton")
   display:SetScript("OnDragStart",function(self)
     if InCombatLockdown and InCombatLockdown() then return end
+    if not canMoveBags(bags) then return end
     local left,bottom=bags:GetLeft(),bags:GetBottom()
     if not left or not bottom then return end
     local scale=bags:GetEffectiveScale()
@@ -167,7 +177,8 @@ local function setup()
   display:SetScript("OnEnter",function(self)
     GameTooltip:SetOwner(self,"ANCHOR_TOP")
     GameTooltip:AddLine("Drag to move bags")
-    GameTooltip:AddLine("Available outside combat. Position is saved.",1,1,1,true)
+    if canMoveBags(bags) then GameTooltip:AddLine("Available outside combat. Position is saved.",1,1,1,true)
+    else GameTooltip:AddLine("This bag frame is protected and cannot be moved here.",1,.7,.3,true) end
     GameTooltip:Show()
   end)
   display:SetScript("OnLeave",function() GameTooltip:Hide() end)

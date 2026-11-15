@@ -225,6 +225,13 @@ local function addValue(tooltip,data)
     if tooltip.AddDoubleLine then tooltip:AddDoubleLine(label,value,.45,.9,.7,1,1,1)
     else tooltip:AddLine(label.."  "..value,.45,.9,.7) end
   end
+  local captured=MarketeerForeverFarmLookup and MarketeerForeverFarmLookup.items and MarketeerForeverFarmLookup.items[id]
+  if captured and (#captured.drops+#(captured.sources or {}))>0 then pair("Recorded sources",tostring(#captured.drops+#(captured.sources or {})).." | /marketeer drops "..id)
+  else pair("Monster sources","No captured drop table") end
+  if tooltip==GameTooltip then
+    tooltip:AddLine("Bag Alt+Right-click: sources or recipe",.65,.85,.7,true)
+    tooltip:AddLine("Alt+Left-click: price history  |  Hold Shift: market details",.65,.85,.7,true)
+  end
   local sell=vendorSellValue(id,link)
   pair("Vendor sell / unit",sell and money(sell) or "Loading...")
   if isMerchant and type(cost)=="number" and cost>0 and count and count>0 then

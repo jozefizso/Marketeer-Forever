@@ -1,5 +1,5 @@
 local core=MarketeerForeverCore
-local frame,mini,coinCheck,bag,history,bagTab,historyTab
+local frame,mini,coinCheck,bag,history,farm,lookup,recipes,bagTab,historyTab,farmTab,lookupTab,recipesTab
 local function text(parent,template,x,y,width)
   local f=parent:CreateFontString(nil,'OVERLAY',template);f:SetPoint('TOPLEFT',x,y);if width then f:SetWidth(width);f:SetJustifyH('LEFT') end;return f
 end
@@ -10,7 +10,7 @@ local function button(parent,label,x,y,w,action)
 end
 local function build()
   if frame then return end
-  frame=CreateFrame('Frame','MarketeerForeverMenu',UIParent,'BackdropTemplate');frame:SetSize(790,520);frame:SetPoint('CENTER');frame:SetMovable(true);frame:SetResizable(true);frame:EnableMouse(true);frame:RegisterForDrag('LeftButton');frame:SetClampedToScreen(true)
+  frame=CreateFrame('Frame','MarketeerForeverMenu',UIParent,'BackdropTemplate');frame:SetSize(790,520);frame:SetPoint('CENTER');frame:SetMovable(true);frame:SetResizable(true);frame:EnableMouse(true);frame:RegisterForDrag('LeftButton');frame:SetClampedToScreen(true);frame:SetFrameStrata('DIALOG');frame:SetFrameLevel(200)
   core.RegisterEscapeFrame('MarketeerForeverMenu')
   local screenW,screenH=UIParent:GetWidth(),UIParent:GetHeight()
   local maxW,maxH=math.max(790,screenW-20),math.max(520,screenH-20)
@@ -21,6 +21,7 @@ local function build()
   local sidebar=frame:CreateTexture(nil,'BACKGROUND');sidebar:SetColorTexture(.035,.045,.04,1);sidebar:SetPoint('TOPLEFT');sidebar:SetPoint('BOTTOMLEFT');sidebar:SetWidth(150)
   local accent=frame:CreateTexture(nil,'ARTWORK');accent:SetColorTexture(.22,.65,.40,1);accent:SetPoint('TOPLEFT',frame,'TOPLEFT',150,-58);accent:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-1,-58);accent:SetHeight(1)
   text(frame,'GameFontNormalLarge',18,-22):SetText('|cff62d68eMARKETEER|r')
+  text(frame,'GameFontHighlightSmall',166,-25,560):SetText('|cff9db9a5Bag: Alt+Right = sources / recipe   |   Alt+Left = history   |   Hold Shift = market details|r')
   local content=CreateFrame('Frame',nil,frame);content:SetPoint('TOPLEFT',frame,'TOPLEFT',150,0);content:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',0,0)
   local close=button(frame,'X',585,-14,28,function()frame:Hide()end);close:ClearAllPoints();close:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-15,-14);close:SetFrameLevel(frame:GetFrameLevel()+10)
   local resize=button(frame,'Resize',0,0,62,function()end);resize:ClearAllPoints();resize:SetSize(62,20);resize:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',-6,6)
@@ -38,15 +39,24 @@ local function build()
   button(bag,'Excluded items',192,-265,160,function()if core.ShowBagExclusions then core.ShowBagExclusions() end end)
   text(bag,'GameFontHighlightSmall',24,-310,550):SetText('The coin tooltip shows estimated bag value. Selling rules and exclusions use your existing settings.')
   history=core.CreateHistoryPanel(content)
-  local function selectTab(which) local h=which=='history';bag:SetShown(not h);history:SetShown(h);bagTab:SetAlpha(h and .65 or 1);historyTab:SetAlpha(h and 1 or .65);if h then history:Refresh() end end
+  farm=core.CreateFarmPanel(content)
+  lookup=core.CreateFarmLookupPanel(content)
+  recipes=core.CreateRecipeBrowser(content)
+  local function selectTab(which) local h=which=='history';local f=which=='farm';local l=which=='lookup';local r=which=='recipes';bag:SetShown(not h and not f and not l and not r);history:SetShown(h);farm:SetShown(f);lookup:SetShown(l);recipes:SetShown(r);bagTab:SetAlpha(not h and not f and not l and not r and 1 or .65);historyTab:SetAlpha(h and 1 or .65);farmTab:SetAlpha(f and 1 or .65);lookupTab:SetAlpha(l and 1 or .65);recipesTab:SetAlpha(r and 1 or .65);if h then history:Refresh() end end
   bagTab=button(frame,'Bag tools',10,-85,130,function()selectTab('bag')end)
   historyTab=button(frame,'Market history',10,-118,130,function()selectTab('history')end)
+  farmTab=button(frame,'Farm',10,-151,130,function()selectTab('farm')end)
+  lookupTab=button(frame,'Find sources',10,-184,130,function()selectTab('lookup')end)
+  recipesTab=button(frame,'Recipes',10,-217,130,function()selectTab('recipes')end)
   frame.selectTab=selectTab
   frame:SetScript('OnShow',function()coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true)end)
   frame:Hide()
 end
-function core.OpenTradingMenu(tab,id) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab(tab=='history' and 'history' or 'bag');if tab=='history' and id then history:SetItem(id) end end
+function core.OpenTradingMenu(tab,id,level) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab((tab=='history' or tab=='farm' or tab=='lookup' or tab=='recipes') and tab or 'bag');if tab=='history' and id then history:SetItem(id) elseif tab=='lookup' and id then lookup:SetItem(id) elseif tab=='farm' and id then core.SelectFarmMonster(id,level) elseif tab=='recipes' and id then recipes:SetItem(id) end end
 function core.ShowMarketHistory(id) core.OpenTradingMenu('history',id) end
+function core.ShowItemDrops(id) core.OpenTradingMenu('lookup',tonumber(id)) end
+function core.ShowFarmMonster(id,level) core.OpenTradingMenu('farm',tonumber(id),level) end
+function core.ShowItemRecipes(id) core.OpenTradingMenu('recipes',tonumber(id)) end
 local function setupMini()
   if mini then return end
   mini=CreateFrame('Button','MarketeerForeverMinimapButton',Minimap);mini:SetSize(32,32);mini:SetFrameStrata('MEDIUM');mini:RegisterForDrag('LeftButton');mini:RegisterForClicks('LeftButtonUp')
@@ -59,7 +69,11 @@ local function setupMini()
   mini:SetScript('OnMouseDown',function(s)s.dragged=false end);mini:SetScript('OnClick',function(s)if not s.dragged then core.OpenTradingMenu()end end)
   mini:SetScript('OnEnter',function(s)GameTooltip:SetOwner(s,'ANCHOR_LEFT');GameTooltip:AddLine('Marketeer');GameTooltip:AddLine('Click: open menu | Drag: move',1,1,1);GameTooltip:Show()end);mini:SetScript('OnLeave',function()GameTooltip:Hide()end)
 end
-SLASH_MARKETEERFOREVERMENU1='/marketeer';SLASH_MARKETEERFOREVERMENU2='/ntrading';SlashCmdList.MARKETEERFOREVERMENU=function(msg)local id=type(msg)=='string' and tonumber(msg:match('item:(%d+)') or msg:match('^%s*(%d+)%s*$'));if id then core.ShowMarketHistory(id) else core.OpenTradingMenu() end end
+SLASH_MARKETEERFOREVERMENU1='/marketeer';SLASH_MARKETEERFOREVERMENU2='/ntrading';SlashCmdList.MARKETEERFOREVERMENU=function(msg)
+  local drops=type(msg)=='string' and msg:match('^%s*drops%s+(.+)%s*$')
+  if drops then local id=tonumber(drops:match('item:(%d+)') or drops);if id then core.ShowItemDrops(id) else print('Marketeer: use /marketeer drops followed by an item ID or link.') end;return end
+  local id=type(msg)=='string' and tonumber(msg:match('item:(%d+)') or msg:match('^%s*(%d+)%s*$'));if id then core.ShowMarketHistory(id) else core.OpenTradingMenu() end
+end
 local events=CreateFrame('Frame');events:RegisterEvent('PLAYER_LOGIN');events:SetScript('OnEvent',function()setupMini()end)
 -- Additive hooks preserve the game's existing modified-click behavior.
 local function altOnly() return IsAltKeyDown and IsAltKeyDown() and not (IsShiftKeyDown and IsShiftKeyDown()) and not (IsControlKeyDown and IsControlKeyDown()) end
@@ -78,4 +92,21 @@ if hooksecurefunc and type(ContainerFrameItemButtonMixin)=='table' and type(Cont
       if type(id)=='number' then core.ShowMarketHistory(id) end
     end
   end)
+end
+-- Observe the native bag click without replacing its protected handler.
+if hooksecurefunc and type(ContainerFrameItemButtonMixin)=='table' then
+  local method=type(ContainerFrameItemButtonMixin.OnClick)=='function' and 'OnClick' or (type(ContainerFrameItemButtonMixin.OnModifiedClick)=='function' and 'OnModifiedClick')
+  if method then hooksecurefunc(ContainerFrameItemButtonMixin,method,function(self,mouseButton)
+    if mouseButton~='RightButton' or not altOnly() or (InCombatLockdown and InCombatLockdown()) then return end
+    local okBag,bag=pcall(function() return self.GetBagID and self:GetBagID() end)
+    local okSlot,slot=pcall(function() return self.GetID and self:GetID() end)
+    if not okBag or not okSlot or (issecretvalue and (issecretvalue(bag) or issecretvalue(slot))) or type(bag)~='number' or type(slot)~='number' or not C_Container or not C_Container.GetContainerItemInfo then return end
+    local ok,info=pcall(C_Container.GetContainerItemInfo,bag,slot)
+    local id=ok and type(info)=='table' and info.itemID
+    if issecretvalue and issecretvalue(id) then return end
+    if type(id)=='number' then
+      local entry=MarketeerForeverFarmLookup and MarketeerForeverFarmLookup.items[id]
+      if core.HasItemRecipe and core.HasItemRecipe(id) and (not entry or #entry.drops==0) then core.ShowItemRecipes(id) else core.ShowItemDrops(id) end
+    end
+  end) end
 end
