@@ -1,9 +1,9 @@
 ## Interface: 16001
 ## Title: Marketeer
 ## Notes: Market, crafting, auction tracking and help.
-## Version: 1.0.82
+## Version: 1.0.83
 ## SavedVariables: MarketeerForeverCoreDB, MarketeerForeverMarketDB, MarketeerForeverCraftDB, NokiUnifiedCoreDB, NokiUnifiedMarketDB, NokiUnifiedCraftDB
-## OptionalDeps: MarketeerForeverData, Baganator, ArkInventory
+## OptionalDeps: MarketeerForeverData, Baganator, ArkInventory, OpenMap
 Core.lua
 UpdaterNotice.lua
 History.lua
@@ -22,6 +22,8 @@ Market\MarketActivity.lua
 Market\FarmData.lua
 Market\FarmLookupData.lua
 Market\FarmScore.lua
+Market\FarmSpawns.lua
+Market\FarmMap.lua
 Market\FarmHover.lua
 Market\Farm.lua
 Market\FarmLookup.lua

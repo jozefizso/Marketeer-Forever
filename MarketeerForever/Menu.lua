@@ -21,7 +21,7 @@ local function build()
   local sidebar=frame:CreateTexture(nil,'BACKGROUND');sidebar:SetColorTexture(.035,.045,.04,1);sidebar:SetPoint('TOPLEFT');sidebar:SetPoint('BOTTOMLEFT');sidebar:SetWidth(150)
   local accent=frame:CreateTexture(nil,'ARTWORK');accent:SetColorTexture(.22,.65,.40,1);accent:SetPoint('TOPLEFT',frame,'TOPLEFT',150,-58);accent:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-1,-58);accent:SetHeight(1)
   text(frame,'GameFontNormalLarge',18,-22):SetText('|cff62d68eMARKETEER|r')
-  text(frame,'GameFontHighlightSmall',166,-25,560):SetText('|cff9db9a5Bag: Alt+Right = sources / recipe   |   Alt+Left = history   |   Hold Shift = market details|r')
+  text(frame,'GameFontHighlightSmall',166,-25,560):SetText('|cff9db9a5Item: Alt+Right = sources / recipe   |   Alt+Left = history   |   Hold Shift = market details|r')
   local content=CreateFrame('Frame',nil,frame);content:SetPoint('TOPLEFT',frame,'TOPLEFT',150,0);content:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',0,0)
   local close=button(frame,'X',585,-14,28,function()frame:Hide()end);close:ClearAllPoints();close:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-15,-14);close:SetFrameLevel(frame:GetFrameLevel()+10)
   local resize=button(frame,'Resize',0,0,62,function()end);resize:ClearAllPoints();resize:SetSize(62,20);resize:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',-6,6)
@@ -77,11 +77,16 @@ end
 local events=CreateFrame('Frame');events:RegisterEvent('PLAYER_LOGIN');events:SetScript('OnEvent',function()setupMini()end)
 -- Additive hooks preserve the game's existing modified-click behavior.
 local function altOnly() return IsAltKeyDown and IsAltKeyDown() and not (IsShiftKeyDown and IsShiftKeyDown()) and not (IsControlKeyDown and IsControlKeyDown()) end
+local function openItemSources(id)
+  if not id or (issecretvalue and issecretvalue(id)) or type(id)~='number' or not altOnly() or (InCombatLockdown and InCombatLockdown()) then return end
+  local entry=MarketeerForeverFarmLookup and MarketeerForeverFarmLookup.items[id]
+  if core.HasItemRecipe and core.HasItemRecipe(id) and (not entry or #entry.drops==0) then core.ShowItemRecipes(id) else core.ShowItemDrops(id) end
+end
 local function openFromLink(link)
   local id=type(link)=='string' and tonumber(link:match('item:(%d+)'))
   if id and altOnly() and not (InCombatLockdown and InCombatLockdown()) then core.ShowMarketHistory(id) end
 end
-if hooksecurefunc and type(SetItemRef)=='function' then hooksecurefunc('SetItemRef',function(link,_,mouseButton)if mouseButton=='LeftButton' then openFromLink(link) end end) end
+if hooksecurefunc and type(SetItemRef)=='function' then hooksecurefunc('SetItemRef',function(link,_,mouseButton)if mouseButton=='LeftButton' then openFromLink(link) elseif mouseButton=='RightButton' and type(link)=='string' then openItemSources(tonumber(link:match('item:(%d+)'))) end end) end
 if hooksecurefunc and type(HandleModifiedItemClick)=='function' then hooksecurefunc('HandleModifiedItemClick',function(link)if IsMouseButtonDown and IsMouseButtonDown('LeftButton') then openFromLink(link) end end) end
 if hooksecurefunc and type(ContainerFrameItemButtonMixin)=='table' and type(ContainerFrameItemButtonMixin.OnModifiedClick)=='function' then
   hooksecurefunc(ContainerFrameItemButtonMixin,'OnModifiedClick',function(self,mouseButton)
@@ -105,8 +110,19 @@ if hooksecurefunc and type(ContainerFrameItemButtonMixin)=='table' then
     local id=ok and type(info)=='table' and info.itemID
     if issecretvalue and issecretvalue(id) then return end
     if type(id)=='number' then
-      local entry=MarketeerForeverFarmLookup and MarketeerForeverFarmLookup.items[id]
-      if core.HasItemRecipe and core.HasItemRecipe(id) and (not entry or #entry.drops==0) then core.ShowItemRecipes(id) else core.ShowItemDrops(id) end
+      openItemSources(id)
     end
   end) end
 end
+-- Auction UI loads on demand, so install its additive hook when it becomes available.
+local auctionHooked=false
+local function installAuctionHook()
+  if auctionHooked or not hooksecurefunc or type(AuctionHouseItemDisplayMixin)~='table' or type(AuctionHouseItemDisplayMixin.OnClick)~='function' then return end
+  hooksecurefunc(AuctionHouseItemDisplayMixin,'OnClick',function(self,button)
+    if button~='RightButton' or not altOnly() then return end
+    local ok,id=pcall(function() local key=self.GetItemKey and self:GetItemKey();return (key and key.itemID) or (self.GetItemID and self:GetItemID()) end)
+    if ok then openItemSources(id) end
+  end)
+  auctionHooked=true
+end
+local shortcutEvents=CreateFrame('Frame');shortcutEvents:RegisterEvent('ADDON_LOADED');shortcutEvents:SetScript('OnEvent',installAuctionHook);installAuctionHook()

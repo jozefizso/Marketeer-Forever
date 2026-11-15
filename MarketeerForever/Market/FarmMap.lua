@@ -1,0 +1,87 @@
+-- Classic spawn locations are approximate references, not verified Forever spawns.
+local core=MarketeerForeverCore
+local fallback={['alterac mountains']=1416,['arathi highlands']=1417,['badlands']=1418,['blasted lands']=1419,['tirisfal glades']=1420,['silverpine forest']=1421,['western plaguelands']=1422,['eastern plaguelands']=1423,['hillsbrad foothills']=1424,['the hinterlands']=1425,['dun morogh']=1426,['searing gorge']=1427,['burning steppes']=1428,['elwynn forest']=1429,['deadwind pass']=1430,['duskwood']=1431,['loch modan']=1432,['redridge mountains']=1433,['stranglethorn vale']=1434,['swamp of sorrows']=1435,['westfall']=1436,['wetlands']=1437,['durotar']=1411,['mulgore']=1412,['the barrens']=1413,['teldrassil']=1438,['darkshore']=1439,['ashenvale']=1440,['thousand needles']=1441,['stonetalon mountains']=1442,['desolace']=1443,['feralas']=1444,['dustwallow marsh']=1445,['tanaris']=1446,['azshara']=1447,['felwood']=1448,["un'goro crater"]=1449,['moonglade']=1450,['silithus']=1451,['winterspring']=1452,['riverglades']=2548,['zephras isle']=2521}
+local mapNames
+local function trim(s)return s:match('^%s*(.-)%s*$')end
+local function names()
+  if mapNames then return mapNames end
+  mapNames={};for name,id in pairs(fallback) do mapNames[name]=id end
+  if C_Map and C_Map.GetMapChildrenInfo then
+    for _,root in ipairs({946,1414,1415}) do
+      local ok,children=pcall(C_Map.GetMapChildrenInfo,root,nil,true)
+      if ok and type(children)=='table' then for _,info in ipairs(children) do
+        if type(info.name)=='string' and type(info.mapID)=='number' and (not issecretvalue or (not issecretvalue(info.name) and not issecretvalue(info.mapID))) and not mapNames[info.name:lower()] then mapNames[info.name:lower()]=info.mapID end
+      end end
+    end
+  end
+  return mapNames
+end
+function core.FarmMapZones(location)
+  local out,seen={},{};if type(location)~='string' then return out end
+  for part in location:gmatch('[^,]+') do
+    local label=trim(part);local key=label:lower();local id=names()[key]
+    if not id then local tail=label:match(':%s*(.+)$') or label:match('%s%-%s(.+)$');if tail then label=trim(tail);id=names()[label:lower()] end end
+    if id and not seen[id] then seen[id]=true;out[#out+1]={name=label,id=id} end
+  end
+  return out
+end
+-- Own the marker frames, using OpenMap's public canvas API rather than modifying OpenMap.
+local markers,selected={},nil
+local function clearMarkers() for _,pin in ipairs(markers) do pin:Hide() end end
+local function refreshMarkers()
+  clearMarkers()
+  local api,map=OpenMapAPI,WorldMapFrame
+  if not selected or not api or not api.IsStitched() or not map or not map.GetCanvas then return 0 end
+  local canvas=map:GetCanvas();local host=map:GetMapID()
+  if not canvas or not host then return 0 end
+  local count=0
+  for _,point in ipairs(selected.points) do
+    local x,y=api.CanvasFromWorldPos(point[1],point[2],point[3])
+    if x and y then
+      local u,v=api.WorldFromMap(host,x,y)
+      local zx,zy;if u then zx,zy=api.MapFromWorld(selected.zone,u,v) end
+      if zx and zy and zx>=0 and zx<=1 and zy>=0 and zy<=1 then
+        count=count+1;local pin=markers[count]
+        if not pin then
+          pin=CreateFrame('Frame',nil,canvas);pin:SetSize(14,14);pin:EnableMouse(false)
+          local icon=pin:CreateTexture(nil,'OVERLAY');icon:SetAllPoints();icon:SetTexture('Interface\\Minimap\\Ping\\ping5');icon:SetVertexColor(.48,.95,.42,1)
+          markers[count]=pin
+        end
+        pin:SetFrameLevel((api.ArtTopLevel() or 0)+1);pin:ClearAllPoints();pin:SetPoint('CENTER',canvas,'TOPLEFT',canvas:GetWidth()*x,-canvas:GetHeight()*y);pin:Show()
+      end
+    end
+  end
+  return count
+end
+local callbackOwner={}
+local callbacksRegistered=false
+function core.FarmMapOpen(npcID,zone)
+  if InCombatLockdown and InCombatLockdown() then return false,'Open the map after combat.' end
+  if not OpenMapAPI or (OpenMapAPI.version or 0)<2 or not OpenMapAPI.RegisterCallback then return false,'OpenMap is unavailable. Enable OpenMap and reload.' end
+  if not C_Map or not C_Map.OpenWorldMap then return false,'World map API is unavailable.' end
+  local ok=pcall(C_Map.OpenWorldMap,zone.id)
+  if not ok then return false,'Could not open this zone map.' end
+  if MarketeerForeverMenu and MarketeerForeverMenu.Hide then MarketeerForeverMenu:Hide() end
+  local points=(MarketeerForeverFarmSpawns and MarketeerForeverFarmSpawns[npcID]) or {}
+  local mob=MarketeerForeverFarmData and MarketeerForeverFarmData.mobs[npcID]
+  local name=mob and mob.name or 'Creature'
+  selected={zone=zone.id,points=points,name=name}
+  clearMarkers()
+  if not callbacksRegistered then
+    OpenMapAPI.RegisterCallback(callbackOwner,'OpenMap_ViewChanged',refreshMarkers)
+    OpenMapAPI.RegisterCallback(callbackOwner,'OpenMap_StitchedChanged',refreshMarkers)
+    callbacksRegistered=true
+  end
+  local attempts=0
+  local function draw()
+    attempts=attempts+1
+    if not OpenMapAPI.IsStitched() and attempts<20 and C_Timer and C_Timer.After then C_Timer.After(.25,draw);return end
+    if not OpenMapAPI.IsStitched() then print('Marketeer: OpenMap’s stitched map is unavailable; no area markers were placed.');return end
+    local success,count=pcall(refreshMarkers)
+    if success and count>0 then print('Marketeer: '..count..' Classic reference locations shown on OpenMap; Forever spawns may differ.')
+    elseif success then print('Marketeer: no Classic reference locations in '..zone.name..'; no area markers were placed.')
+    else print('Marketeer: could not display OpenMap markers.') end
+  end
+  if C_Timer and C_Timer.After then C_Timer.After(.25,draw) else draw() end
+  return true
+end

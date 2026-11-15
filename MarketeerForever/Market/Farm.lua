@@ -1,5 +1,6 @@
 local core=MarketeerForeverCore
 local panel,levelBox,searchBox,status,footer,detailTitle,detailInfo,sortButton
+local mapMenu,mapMenuRows
 local rows,detailRows={},{}
 local results,prices={},{}
 local selected,offset,detailOffset=nil,0,0
@@ -151,14 +152,35 @@ function core.CreateFarmPanel(parent)
     'A ranking from 0 to 100. The highest-scoring monster within your maximum level gets 100; other monsters are compared to it.',
     'Each drop starts with its estimated value per kill. We favor items that sell more often: 300 estimated sales per day receives full weight, while 150 receives half and 16 receives about 5%.',
     'We also reduce uncertain drop rates and apply a 5% auction cut. The score is not gold, a sale guarantee, or an estimate for 100 kills.'})
-  explain(panel,topHeaders[6],76,'Score coverage',{
+  explain(panel,topHeaders[6],66,'Score coverage',{
     'Scored drops / recorded drops. For example, 58/110 means 58 of 110 recorded drops contributed to this monster’s score.',
     'A drop needs a price from your last AH scan, estimated sales per day, and at least 20 observations. Missing data is excluded; zero sales is known data and contributes zero points.',
     'More coverage means the score includes more of the recorded loot table, but it does not guarantee the table is complete.'})
+  local mapHeader=label(panel,0,-154,48,'GameFontNormalSmall');mapHeader:SetText('MAP')
+  mapMenu=CreateFrame('Frame',nil,panel,'BackdropTemplate');mapMenu:SetSize(220,210);mapMenu:SetFrameLevel(panel:GetFrameLevel()+30);mapMenu:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});mapMenu:SetBackdropColor(.055,.075,.065,.99);mapMenu:SetBackdropBorderColor(.25,.48,.34,1);mapMenu:EnableMouse(true);mapMenu:Hide()
+  label(mapMenu,10,-10,190,'GameFontNormalSmall'):SetText('CHOOSE A ZONE')
+  mapMenuRows={}
+  for i=1,7 do
+    local zoneButton=button(mapMenu,'',10,-27-(i-1)*24,200,function(s)
+      if not s.zone or not mapMenu.npcID then return end
+      local success,err=core.FarmMapOpen(mapMenu.npcID,s.zone);mapMenu:Hide();if not success then status:SetText(err) end
+    end);mapMenuRows[i]=zoneButton
+  end
+  local function showMap(row)
+    if not row.entry then return end
+    local zones=core.FarmMapZones(row.entry.mob.location)
+    if #zones==0 then status:SetText('No matching map is available for this creature’s recorded locations.');return end
+    if #zones==1 then local ok,err=core.FarmMapOpen(row.entry.id,zones[1]);if not ok then status:SetText(err) end;return end
+    mapMenu.npcID=row.entry.id;mapMenu:ClearAllPoints();mapMenu:SetPoint('TOPRIGHT',row.map,'BOTTOMRIGHT',0,-2)
+    for i,b in ipairs(mapMenuRows) do b.zone=zones[i];if b.zone then b:SetText(b.zone.name);b:Show() else b:Hide() end end
+    mapMenu:SetHeight(35+math.min(#zones,#mapMenuRows)*24);mapMenu:Show()
+  end
   for i=1,PAGE do
     local row=CreateFrame('Button',nil,panel,'BackdropTemplate');row:SetPoint('TOPLEFT',panel,'TOPLEFT',14,-172-(i-1)*23);row:SetSize(590,22);row:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8'});row:SetBackdropColor(i%2==0 and .12 or .08,.12,.12,.95)
     row.name=label(row,4,-4,152);row.level=label(row,161,-4,42);row.zone=label(row,206,-4,125);row.value=label(row,336,-4,72);row.score=label(row,411,-4,72);row.coverage=label(row,491,-4,90)
-    row:SetScript('OnClick',function(s)selected=s.entry;detailOffset=0;renderDetail()end);rows[i]=row
+    row.map=button(row,'Map',0,0,50,function()showMap(row)end);row.map:ClearAllPoints();row.map:SetPoint('RIGHT',row,'RIGHT',-2,0);row.map:SetSize(48,20)
+    row.map:SetScript('OnEnter',function(s)if GameTooltip then GameTooltip:SetOwner(s,'ANCHOR_RIGHT');GameTooltip:AddLine('Show locations on OpenMap');GameTooltip:AddLine('Choose a recorded zone. Markers show Classic spawn references and may differ in Forever.',1,1,1,true);GameTooltip:Show()end end);row.map:SetScript('OnLeave',function()if GameTooltip then GameTooltip:Hide()end end)
+    row:SetScript('OnClick',function(s)mapMenu:Hide();selected=s.entry;detailOffset=0;renderDetail()end);rows[i]=row
   end
   footer=label(panel,18,-316,590)
   button(panel,'Previous',18,-335,75,function()offset=offset-PAGE;render()end);button(panel,'Next',100,-335,75,function()offset=offset+PAGE;render()end)
@@ -184,10 +206,12 @@ function core.CreateFarmPanel(parent)
   local function layout()
     local width=math.max(590,(panel:GetWidth() or 620)-42)
     DETAIL=math.max(3,math.min(MAX_DETAIL,math.floor(((panel:GetHeight() or 520)-445)/22)))
-    local top={0,.265,.34,.56,.71,.85,1};local bottom={0,.33,.51,.65,.80,1}
+    local dataWidth=width-56
+    mapHeader:ClearAllPoints();mapHeader:SetPoint('TOPLEFT',panel,'TOPLEFT',18+dataWidth+7,-154)
+    local top={0,.265,.34,.56,.71,.835,1};local bottom={0,.33,.51,.65,.80,1}
     local topKeys={'name','level','zone','value','score','coverage'};local detailKeys={'name','rate','sales','price','score'}
-    for i,h in ipairs(topHeaders) do h:ClearAllPoints();h:SetPoint('TOPLEFT',panel,'TOPLEFT',18+width*top[i],-154);h:SetWidth(width*(top[i+1]-top[i])-5) end
-    for _,row in ipairs(rows) do row:SetWidth(width);for i,key in ipairs(topKeys) do local t=row[key];t:ClearAllPoints();t:SetPoint('TOPLEFT',row,'TOPLEFT',4+width*top[i],-4);t:SetWidth(width*(top[i+1]-top[i])-5) end end
+    for i,h in ipairs(topHeaders) do h:ClearAllPoints();h:SetPoint('TOPLEFT',panel,'TOPLEFT',18+dataWidth*top[i],-154);h:SetWidth(dataWidth*(top[i+1]-top[i])-5) end
+    for _,row in ipairs(rows) do row:SetWidth(width);for i,key in ipairs(topKeys) do local t=row[key];t:ClearAllPoints();t:SetPoint('TOPLEFT',row,'TOPLEFT',4+dataWidth*top[i],-4);t:SetWidth(dataWidth*(top[i+1]-top[i])-5) end end
     for i,h in ipairs(detailHeaders) do h:ClearAllPoints();h:SetPoint('TOPLEFT',panel,'TOPLEFT',18+width*bottom[i],-388);h:SetWidth(width*(bottom[i+1]-bottom[i])-5) end
     for _,row in ipairs(detailRows) do row:SetWidth(width);for i,key in ipairs(detailKeys) do local t=row[key];t:ClearAllPoints();t:SetPoint('TOPLEFT',row,'TOPLEFT',4+width*bottom[i],-4);t:SetWidth(width*(bottom[i+1]-bottom[i])-5) end end
     if selected then renderDetail() end

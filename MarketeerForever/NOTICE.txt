@@ -6,6 +6,10 @@ Monster drops, item sources, locations, and observed drop rates: Wowhead
 (https://www.wowhead.com/forever). Bundled as an incomplete snapshot;
 some observed rates use Classic Era fallback data.
 
+Optional approximate Classic creature spawn positions: CMaNGOS Classic DB
+(https://github.com/cmangos/classic-db), GPL-3.0; not verified for Forever.
+The reference SQL, generator, and license are included in Source/ClassicDB/.
+
 Vendor observations and crafting skill observations: Efficient Games,
 https://efficient.games/ and https://github.com/JIVESCORP/eg-link-output-wowf,
 licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/).
