@@ -79,13 +79,37 @@ local function refreshMarkers()
 end
 local callbackOwner={}
 local callbacksRegistered=false
+local restoreMenu,hookedMap=false,nil
+local function armMenuRestore(map)
+  if not map or not map.HookScript then return end
+  if hookedMap~=map then
+    map:HookScript('OnHide',function(self)
+      if not restoreMenu then return end
+      restoreMenu=false
+      local function reopen()
+        if self.IsShown and self:IsShown() then return end
+        if MarketeerForeverMenu and MarketeerForeverMenu.IsShown and MarketeerForeverMenu:IsShown() then return end
+        if core.OpenTradingMenu then core.OpenTradingMenu() end
+      end
+      -- Wait until the map's close/escape handling has finished.
+      if C_Timer and C_Timer.After then C_Timer.After(0,reopen) else reopen() end
+    end)
+    hookedMap=map
+  end
+  restoreMenu=true
+end
 function core.FarmMapOpen(npcID,zone)
   if InCombatLockdown and InCombatLockdown() then return false,'Open the map after combat.' end
   if not OpenMapAPI or (OpenMapAPI.version or 0)<2 or not OpenMapAPI.RegisterCallback then return false,'Map requires OpenMap. Install or update the OpenMap addon, enable it, then reload.' end
   if not C_Map or not C_Map.OpenWorldMap then return false,'World map API is unavailable.' end
+  local wasVisible=MarketeerForeverMenu and MarketeerForeverMenu.IsShown and MarketeerForeverMenu:IsShown()
+  restoreMenu=false
   local ok=pcall(C_Map.OpenWorldMap,zone.id)
   if not ok then return false,'Could not open this zone map.' end
-  if MarketeerForeverMenu and MarketeerForeverMenu.Hide then MarketeerForeverMenu:Hide() end
+  if wasVisible and WorldMapFrame and WorldMapFrame.IsShown and WorldMapFrame:IsShown() then
+    armMenuRestore(WorldMapFrame)
+    if MarketeerForeverMenu.Hide then MarketeerForeverMenu:Hide() end
+  end
   local points=(MarketeerForeverFarmSpawns and MarketeerForeverFarmSpawns[npcID]) or {}
   local mob=MarketeerForeverFarmData and MarketeerForeverFarmData.mobs[npcID]
   local name=mob and mob.name or 'Creature'

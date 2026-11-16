@@ -9,7 +9,12 @@ lua.execute('''
 MarketeerForeverCore={}
 MarketeerForeverFarmData={mobs={[2559]={name='Highland Strider'}}}
 local canvas={GetWidth=function()return 1000 end,GetHeight=function()return 800 end}
-WorldMapFrame={GetCanvas=function()return canvas end,GetMapID=function()return 1417 end}
+WorldMapFrame={shown=false,GetCanvas=function()return canvas end,GetMapID=function()return 1417 end,
+ IsShown=function(self)return self.shown end,HookScript=function(self,_,fn)self.onHide=fn end,
+ Hide=function(self)self.shown=false;if self.onHide then self.onHide(self) end end}
+MarketeerForeverMenu={shown=true,IsShown=function(self)return self.shown end,Hide=function(self)self.shown=false end}
+reopened=0
+MarketeerForeverCore.OpenTradingMenu=function()reopened=reopened+1;MarketeerForeverMenu.shown=true end
 pins={}
 function CreateFrame()
  local p={shown=false,scripts={}};function p:SetSize()end;function p:EnableMouse()end;function p:SetFrameLevel()end;function p:SetScript(k,v)self.scripts[k]=v end
@@ -24,7 +29,7 @@ OpenMapAPI={version=2,IsStitched=function()return stitched end,CanvasFromWorldPo
  RegisterCallback=function(_,event,fn)callbacks[event]=fn end,ShowWorld=function(u,v)focused={u,v}end}
 stitched=true
 C_Timer={After=function(_,f)f()end}
-C_Map={GetMapChildrenInfo=function()return {}end,OpenWorldMap=function(id)opened=id end,
+C_Map={GetMapChildrenInfo=function()return {}end,OpenWorldMap=function(id)opened=id;WorldMapFrame.shown=true end,
  SetUserWaypoint=function()error('normal-map waypoint must not be used')end}
 print=function()end
 ''')
@@ -33,10 +38,16 @@ for name in ('FarmSpawns.lua','FarmMap.lua'):
 lua.execute('''
 local c=MarketeerForeverCore
 assert(c.FarmHasSpawnReferences(2559) and not c.FarmHasSpawnReferences(-1))
+assert(not c.FarmHasSpawnReferences(276105) and not c.FarmHasSpawnReferences(276108))
 local zones=c.FarmMapZones('Arathi Highlands, Hillsbrad Foothills')
 assert(#zones==2 and zones[1].id==1417 and zones[2].id==1424)
 local dungeon=c.FarmMapZones('Shadowfang Keep');assert(#dungeon==1 and dungeon[1].id==1421 and dungeon[1].entrance)
 assert(c.FarmMapOpen(-1,dungeon[1]) and opened==1421 and focused~=nil)
+assert(not MarketeerForeverMenu.shown)
+WorldMapFrame:Hide();assert(MarketeerForeverMenu.shown and reopened==1)
+WorldMapFrame:Hide();assert(reopened==1)
+MarketeerForeverMenu.shown=false
+assert(c.FarmMapOpen(-1,dungeon[1]));WorldMapFrame:Hide();assert(reopened==1 and not MarketeerForeverMenu.shown)
 assert(c.FarmMapOpen(2559,zones[1]) and opened==1417 and #pins>0 and pins[1].shown)
 assert(math.abs(focused[1]-.4)<.00001 and math.abs(focused[2]-.6)<.00001)
 assert(pins[1].icon.atlas=='Waypoint-MapPin-Untracked')

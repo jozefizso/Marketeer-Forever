@@ -8,6 +8,7 @@ local maxScore=0
 local sortMode='score'
 local PAGE,DETAIL=6,3
 local MAX_DETAIL=12
+local spawnIcon='|A:Waypoint-MapPin-Untracked:14:14|a'
 local function money(n)
   if type(n)~='number' then return '--' end
   n=math.floor(n+.5);local g=math.floor(n/10000);local s=math.floor(n%10000/100);local c=n%100
@@ -62,7 +63,8 @@ local function render()
   for i,row in ipairs(rows) do
     local v=results[offset+i]
     if v then
-      row.entry=v;row.name:SetText(v.mob.name);row.level:SetText(v.mob.level);row.zone:SetText(v.mob.location);row.value:SetText(money(v.gross));row.score:SetText(points(v.score));row.coverage:SetText(v.scored..'/'..#v.mob.drops);row.map:SetText(core.FarmHasSpawnReferences and core.FarmHasSpawnReferences(v.id) and 'Map' or 'No pins');row:Show()
+      local hasSpawns=core.FarmHasSpawnReferences and core.FarmHasSpawnReferences(v.id)
+      row.entry=v;row.name:SetText((hasSpawns and (spawnIcon..' ') or '')..v.mob.name);row.level:SetText(v.mob.level);row.zone:SetText(v.mob.location);row.value:SetText(money(v.gross));row.score:SetText(points(v.score));row.coverage:SetText(v.scored..'/'..#v.mob.drops);row.map:SetText(hasSpawns and 'Map' or 'No pins');row:Show()
     else row.entry=nil;row:Hide() end
   end
   footer:SetText(#results==0 and 'No results with the current filters and price data.' or ((offset+1)..'-'..math.min(offset+PAGE,#results)..' of '..#results..' | Coverage: scored drops / recorded drops (20+ observations).'))
@@ -142,9 +144,9 @@ function core.CreateFarmPanel(parent)
   if panel then return panel end
   panel=CreateFrame('Frame',nil,parent);panel:SetAllPoints();panel:Hide()
   label(panel,18,-73,550,'GameFontNormalLarge'):SetText('FARM  |  MONSTER LOOT')
-  label(panel,280,-77,270,'GameFontHighlightSmall'):SetText('|cff9db9a5Map requires the OpenMap addon|r')
+  label(panel,280,-77,350,'GameFontHighlightSmall'):SetText('|cff9db9a5OpenMap required  |  '..spawnIcon..' = Classic spawn data|r')
   label(panel,18,-108,60):SetText('Max level')
-  levelBox=CreateFrame('EditBox',nil,panel,'InputBoxTemplate');levelBox:SetSize(42,24);levelBox:SetPoint('TOPLEFT',panel,'TOPLEFT',88,-102);levelBox:SetAutoFocus(false);levelBox:SetNumeric(true);levelBox:SetMaxLetters(3);levelBox:SetText(tostring(math.max(1,UnitLevel('player') or 1)))
+  levelBox=CreateFrame('EditBox',nil,panel,'InputBoxTemplate');levelBox:SetSize(42,24);levelBox:SetPoint('TOPLEFT',panel,'TOPLEFT',88,-102);levelBox:SetAutoFocus(false);levelBox:SetNumeric(true);levelBox:SetMaxLetters(3);levelBox:SetText('')
   label(panel,148,-108,40):SetText('Search')
   searchBox=CreateFrame('EditBox',nil,panel,'InputBoxTemplate');searchBox:SetSize(115,24);searchBox:SetPoint('TOPLEFT',panel,'TOPLEFT',195,-102);searchBox:SetAutoFocus(false);searchBox:SetMaxLetters(60)
   button(panel,'Refresh',325,-102,75,function()refresh()end)
