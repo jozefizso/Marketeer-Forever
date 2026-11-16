@@ -31,5 +31,23 @@ c.AddShoppingVendor({id=20,name='Vendor Item'});assert(shownText('Vendor Item') 
 bagItems={{itemID=1,stackCount=52},{itemID=2,stackCount=20},{itemID=20,stackCount=1}};fireBags()
 assert(shownText('|cff73e6a3[OK] 52 / 52|r') and shownText('20 / 50') and shownText('|cff73e6a3[OK]|r'))
 bagItems={};fireBags();assert(shownText('0 / 52') and shownText('Needed'))
+bagItems={{itemID=2,stackCount=20}}
+c.active=true;c.phase='idle';c.CheckBuyout=function(key,callback)callback({tiers={{price=123}}});return true end
+C_AuctionHouse={MakeItemKey=function(id)return {itemID=id}end,GetItemKeyInfo=function()return {isCommodity=true}end}
+local display={resultsLoaded=false,GetItemID=function()return 2 end,SetQuantitySelected=function(_,q)chosenQuantity=q end}
+AuctionHouseFrame={IsShown=function()return true end,CommoditiesBuyFrame={IsShown=function()return true end,BuyDisplay=display},SelectBrowseResult=function(_,result)openedID=result.itemKey.itemID;openedPrice=result.minPrice end,QueryItem=function()end}
+AuctionHouseSearchContext={BuyCommodities=1};C_Timer={After=function(_,f)f()end}
+fireBags();local open;local count=0
+for _,o in ipairs(objects) do if o.shown and o.text=='Open' and o.scripts.OnClick then count=count+1;if count==2 then open=o;break end end end
+assert(open);open.scripts.OnClick(open);assert(openedID==2 and openedPrice==123)
+for _,o in ipairs(objects) do if o.scripts.OnEvent then o.scripts.OnEvent(o,'COMMODITY_SEARCH_RESULTS_RECEIVED') end;if o.scripts.OnUpdate then o.scripts.OnUpdate(o,.3) end end
+assert(chosenQuantity==nil)
+display.resultsLoaded=true
+for _,o in ipairs(objects) do if o.scripts.OnUpdate then o.scripts.OnUpdate(o,.3) end end
+assert(chosenQuantity==30)
+chosenQuantity=nil;c.OpenShoppingMaterial(2,3)
+for _,o in ipairs(objects) do if o.scripts.OnEvent then o.scripts.OnEvent(o,'COMMODITY_SEARCH_RESULTS_RECEIVED') end end
+for _,o in ipairs(objects) do if o.scripts.OnUpdate then o.scripts.OnUpdate(o,.3) end end
+assert(chosenQuantity==3)
 ''')
-print('Craft-count multiplication, shared materials and vendor items passed.')
+print('Shopping quantities, bag progress and auction buy-view quantity passed.')

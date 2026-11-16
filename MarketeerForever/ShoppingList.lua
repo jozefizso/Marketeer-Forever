@@ -3,6 +3,7 @@ local core=MarketeerForeverCore
 local recipes,vendors={},{}
 local frame,content,scroll
 local render,rendering
+local opening,pendingQuantity
 local requestedNames={}
 local function bagCounts()
   if not C_Container or type(C_Container.GetContainerNumSlots)~='function' or type(C_Container.GetContainerItemInfo)~='function' then return nil end
@@ -25,6 +26,52 @@ local function bagCounts()
     end
   end
   return counts
+end
+local function auctionOpen()
+  return core.active and AuctionHouseFrame and AuctionHouseFrame.IsShown and AuctionHouseFrame:IsShown()
+end
+local function openMaterial(id,needed)
+  if type(id)~='number' or id<=0 or type(needed)~='number' or needed<=0 then return end
+  if not auctionOpen() then print('Marketeer: open the auction house first.');return end
+  if opening then print('Marketeer: the previous material is still loading.');return end
+  if core.phase~='idle' or (core.IsCompetitionSearchActive and core.IsCompetitionSearchActive()) then print('Marketeer: wait for the auction scan to finish, then try again.');return end
+  if not C_AuctionHouse or not C_AuctionHouse.MakeItemKey or not core.CheckBuyout then print('Marketeer: auction search is unavailable.');return end
+  local key=C_AuctionHouse.MakeItemKey(id);if not key then print('Marketeer: item details are unavailable.');return end
+  opening={id=id};local request=opening
+  local ok,err=core.CheckBuyout(key,function(result,message)
+    if opening~=request then return end;opening=nil
+    if not auctionOpen() then return end
+    if not result or not result.tiers or not result.tiers[1] then print('Marketeer: '..(message or 'No listings found.'));return end
+    local infoOK,info=pcall(C_AuctionHouse.GetItemKeyInfo,key)
+    if not infoOK or not info or type(info.isCommodity)~='boolean' or not AuctionHouseFrame.SelectBrowseResult then print('Marketeer: auction item details are unavailable.');return end
+    if MarketeerForeverTabs and MarketeerForeverTabs.HideAll then MarketeerForeverTabs:HideAll() end
+    local opened,why=pcall(AuctionHouseFrame.SelectBrowseResult,AuctionHouseFrame,{itemKey=key,minPrice=result.tiers[1].price})
+    if not opened then print('Marketeer: could not open this item: '..tostring(why));return end
+    if info.isCommodity then
+      pendingQuantity={id=id,quantity=needed,delay=.25,elapsed=0}
+      if AuctionHouseFrame.QueryItem and AuctionHouseSearchContext and AuctionHouseSearchContext.BuyCommodities then
+        local sent=pcall(AuctionHouseFrame.QueryItem,AuctionHouseFrame,AuctionHouseSearchContext.BuyCommodities,key)
+        if not sent then pendingQuantity=nil;print('Marketeer: enter the quantity manually; live results could not be requested.') end
+      else pendingQuantity=nil;print('Marketeer: enter the quantity manually in the buy window.') end
+    else print('Marketeer: this item uses individual auctions; select listings to buy '..needed..' needed.') end
+  end)
+  if not ok then opening=nil;print('Marketeer: '..tostring(err or 'Could not search auctions.')) elseif opening==request then print('Marketeer: checking live auction listings...') end
+end
+core.OpenShoppingMaterial=openMaterial
+local function applyQuantity()
+  local request=pendingQuantity;if not request or not auctionOpen() then return end
+  local buy=AuctionHouseFrame.CommoditiesBuyFrame
+  local display=buy and buy.BuyDisplay
+  if not buy or not buy.IsShown or not buy:IsShown() or not display or not display.GetItemID then return end
+  if display:GetItemID()~=request.id then pendingQuantity=nil;return end
+  local input=display.QuantityInput;local box=input and (input.InputBox or input.EditBox or input)
+  if box and box.HasFocus and box:HasFocus() then pendingQuantity=nil;return end
+  if not display.resultsLoaded then return end
+  if C_AuctionHouse.HasFullCommoditySearchResults and not C_AuctionHouse.HasFullCommoditySearchResults(request.id) then return end
+  if type(display.SetQuantitySelected)~='function' then pendingQuantity=nil;print('Marketeer: enter the quantity manually in the buy window.');return end
+  pendingQuantity=nil
+  local ok=pcall(display.SetQuantitySelected,display,request.quantity)
+  if not ok then print('Marketeer: enter the quantity manually in the buy window.') end
 end
 local function itemName(id,fallback)
   local name=GetItemInfo and GetItemInfo(id)
@@ -89,11 +136,12 @@ render=function()
     y=y+27
   end
   local all={};for _,m in pairs(materials) do all[#all+1]=m end;table.sort(all,function(a,b)return a.name:lower()<b.name:lower()end)
-  if #all>0 then local r=line('heading',y,width);label(r,2,-4,width-140,'GameFontNormalSmall'):SetText('MATERIALS NEEDED');local h=label(r,width-132,-4,130,'GameFontNormalSmall');h:SetJustifyH('RIGHT');h:SetText('IN BAGS / NEED');y=y+24 end
+  if #all>0 then local r=line('heading',y,width);label(r,2,-4,width-195,'GameFontNormalSmall'):SetText('MATERIALS NEEDED');local h=label(r,width-190,-4,130,'GameFontNormalSmall');h:SetJustifyH('RIGHT');h:SetText('IN BAGS / NEED');y=y+24 end
   for _,m in ipairs(all) do
-    local r=line('material',y,width);label(r,8,-4,width-150):SetText(itemName(m.id,m.name))
-    local have=carried and (carried[m.id] or 0);local progress=label(r,width-132,-4,130);progress:SetJustifyH('RIGHT')
+    local r=line('material',y,width);label(r,8,-4,width-205):SetText(itemName(m.id,m.name))
+    local have=carried and (carried[m.id] or 0);local progress=label(r,width-190,-4,130);progress:SetJustifyH('RIGHT')
     if have and have>=m.quantity then progress:SetText('|cff73e6a3[OK] '..have..' / '..m.quantity..'|r') else progress:SetText((have and tostring(have) or '--')..' / '..m.quantity) end
+    if auctionOpen() then local buy=button(r,'Open',50,function()local counts=bagCounts();if not counts then print('Marketeer: bag quantities are unavailable; try again.');return end;local missing=math.max(0,m.quantity-(counts[m.id] or 0));if missing>0 then openMaterial(m.id,missing) else print('Marketeer: you already have the required amount in your bags.') end end);buy:SetPoint('TOPRIGHT',0,0);buy:SetEnabled(have~=nil and have<m.quantity) end
     y=y+22
   end
   if #vendors>0 then local r=line('heading',y,width);label(r,2,-4,width,'GameFontNormalSmall'):SetText('VENDOR ITEMS');y=y+24 end
@@ -102,11 +150,27 @@ render=function()
   content:SetHeight(math.max(1,y+5))
   rendering=false
 end
-local itemEvents=CreateFrame('Frame');itemEvents:RegisterEvent('GET_ITEM_INFO_RECEIVED');itemEvents:RegisterEvent('BAG_UPDATE_DELAYED');itemEvents:SetScript('OnEvent',function(_,event,id,success)
+local itemEvents=CreateFrame('Frame');for _,event in ipairs({'GET_ITEM_INFO_RECEIVED','BAG_UPDATE_DELAYED','AUCTION_HOUSE_SHOW','AUCTION_HOUSE_CLOSED','COMMODITY_SEARCH_RESULTS_RECEIVED','COMMODITY_SEARCH_RESULTS_UPDATED'}) do pcall(itemEvents.RegisterEvent,itemEvents,event) end;itemEvents:SetScript('OnEvent',function(_,event,id,success)
+  if event=='AUCTION_HOUSE_CLOSED' then opening=nil;pendingQuantity=nil end
+  if event=='AUCTION_HOUSE_SHOW' or event=='AUCTION_HOUSE_CLOSED' then
+    if C_Timer and C_Timer.After then C_Timer.After(0,function()if frame and frame:IsShown() then render() end end) elseif frame and frame:IsShown() then render() end
+    return
+  end
+  if (event=='COMMODITY_SEARCH_RESULTS_RECEIVED' or event=='COMMODITY_SEARCH_RESULTS_UPDATED') then
+    -- RECEIVED carries no item ID on Forever; verify the active item in applyQuantity.
+    if pendingQuantity and (event=='COMMODITY_SEARCH_RESULTS_RECEIVED' or pendingQuantity.id==id) then pendingQuantity.delay=.25 end
+    return
+  end
   if event=='GET_ITEM_INFO_RECEIVED' then if not success or not requestedNames[id] then return end;requestedNames[id]=nil end
   if not frame or not frame:IsShown() then return end
   for _,row in ipairs(widgets) do if row.edit and row.edit.HasFocus and row.edit:HasFocus() then return end end
   render()
+end)
+itemEvents:SetScript('OnUpdate',function(_,delta)
+  local request=pendingQuantity;if not request then return end
+  request.elapsed=request.elapsed+delta;request.delay=math.max(0,request.delay-delta)
+  if request.elapsed>15 then pendingQuantity=nil;print('Marketeer: quantity could not be filled; enter '..request.quantity..' manually.');return end
+  if request.delay==0 then applyQuantity() end
 end)
 function core.AddShoppingRecipe(recipe)
   if type(recipe)~='table' or type(recipe.materials)~='table' then return end

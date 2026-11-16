@@ -394,7 +394,7 @@ local function createPanel()
   materialPopup=CreateFrame("Frame",nil,panel,"BackdropTemplate");materialPopup:SetSize(620,290);materialPopup:SetPoint("CENTER",panel,"CENTER",0,0);materialPopup:SetFrameLevel(panel:GetFrameLevel()+30);materialPopup:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});materialPopup:SetBackdropColor(.055,.075,.065,.99);materialPopup:SetBackdropBorderColor(.25,.48,.34,1);materialPopup:EnableMouse(true);materialPopup:Hide()
   materialTitle=makeText(materialPopup,nil,15,-14,400,"GameFontNormal")
   local closeMaterials=CreateFrame("Button",nil,materialPopup,"UIPanelButtonTemplate");closeMaterials:SetSize(26,22);closeMaterials:SetPoint("TOPRIGHT",materialPopup,"TOPRIGHT",-8,-8);closeMaterials:SetText("X");closeMaterials:SetScript("OnClick",function()materialPopup:Hide()end)
-  makeText(materialPopup,nil,15,-40,440,"GameFontHighlightSmall"):SetText("Materials per craft. Find sources opens recorded item sources.")
+  makeText(materialPopup,nil,15,-40,580,"GameFontHighlightSmall"):SetText("Materials per craft. Buy opens auctions; Find sources shows item sources.")
   local materialColumns={{'MATERIAL',2,220},{'AH / UNIT',230,85},{'COST / CRAFT',320,90}}
   for _,col in ipairs(materialColumns) do makeText(materialPopup,nil,14+col[2],-62,col[3],"GameFontNormalSmall"):SetText(col[1]) end
   materialRows={}
@@ -404,6 +404,8 @@ local function createPanel()
     row.unit=makeText(row,nil,materialColumns[2][2],-4,materialColumns[2][3],"GameFontHighlightSmall")
     row.cost=makeText(row,nil,materialColumns[3][2],-4,materialColumns[3][3],"GameFontHighlightSmall")
     row.drops=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.drops:SetSize(100,21);row.drops:SetPoint("RIGHT",row,"RIGHT",0,0);row.drops:SetText("Find sources")
+    row.buy=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.buy:SetSize(55,21);row.buy:SetPoint("RIGHT",row.drops,"LEFT",-6,0);row.buy:SetText("Buy")
+    row.buy:SetScript("OnClick",function()if row.itemID and row.quantity and MarketeerForeverCore.OpenShoppingMaterial then MarketeerForeverCore.OpenShoppingMaterial(row.itemID,row.quantity) end end)
     row.drops:SetScript("OnClick",function()if row.itemID and MarketeerForeverCore.ShowItemDrops then MarketeerForeverCore.ShowItemDrops(row.itemID) end end);materialRows[i]=row
   end
   materialsButton:SetScript("OnClick",function()
@@ -414,8 +416,8 @@ local function createPanel()
       local saved=MarketeerForeverFarmLookup and MarketeerForeverFarmLookup.items[m.id]
       local name=(GetItemInfo and GetItemInfo(m.id)) or (saved and saved.name) or m.name or ("Item #"..m.id)
       local unit=selectedItem.prices and selectedItem.prices[m.id]
-      row.itemID=m.id;row.name:SetText(tostring(m.quantity).." x "..name);row.unit:SetText(copper(unit));row.cost:SetText(copper(type(unit)=='number' and type(m.quantity)=='number' and unit*m.quantity or nil));row.drops:SetEnabled(saved and (#saved.drops+#(saved.sources or {}))>0 or false);row:Show()
-    else row.itemID=nil;row:Hide() end end
+      row.itemID=m.id;row.quantity=m.quantity;row.name:SetText(tostring(m.quantity).." x "..name);row.unit:SetText(copper(unit));row.cost:SetText(copper(type(unit)=='number' and type(m.quantity)=='number' and unit*m.quantity or nil));row.drops:SetEnabled(saved and (#saved.drops+#(saved.sources or {}))>0 or false);row:Show()
+    else row.itemID=nil;row.quantity=nil;row:Hide() end end
     materialPopup:Show()
   end)
   flipControls={budgetLabel,budgetBox,minLabel,minSalesBox,minProfitLabel,minStackProfitBox,sortButton}
