@@ -71,7 +71,7 @@ sealed class Updater : Form {
   string trendPath=Path.Combine(dataDir,"TrendData.lua");if(!File.Exists(trendPath))File.WriteAllText(trendPath,"-- Trend data not yet available.\n",new UTF8Encoding(false));
   string historyPath=Path.Combine(dataDir,"HistoryData.lua");if(!File.Exists(historyPath))File.WriteAllText(historyPath,"-- Price history not yet available.\n",new UTF8Encoding(false));
   string namesPath=Path.Combine(dataDir,"ItemNames.lua");if(!File.Exists(namesPath))File.WriteAllText(namesPath,"-- Item names not yet available.\n",new UTF8Encoding(false));
-  try{File.WriteAllText(tocTmp,"## Interface: "+match.Groups[1].Value+"\n## Title: Marketeer Data\n## Notes: AHledger data\nMarketData.lua\nTrendData.lua\nHistoryData.lua\nItemNames.lua\n",new UTF8Encoding(false));if(File.Exists(dataToc))File.Replace(tocTmp,dataToc,null);else File.Move(tocTmp,dataToc);}finally{if(File.Exists(tocTmp))File.Delete(tocTmp);}return count;
+  try{File.WriteAllText(tocTmp,"## Interface: "+match.Groups[1].Value+"\n## Title: Marketeer Data\n## IconTexture: Interface\\MoneyFrame\\UI-GoldIcon\n## Notes: AHledger data\nMarketData.lua\nTrendData.lua\nHistoryData.lua\nItemNames.lua\n",new UTF8Encoding(false));if(File.Exists(dataToc))File.Replace(tocTmp,dataToc,null);else File.Move(tocTmp,dataToc);}finally{if(File.Exists(tocTmp))File.Delete(tocTmp);}return count;
  }
  static long Base36(string input){if(string.IsNullOrEmpty(input)||input.Length>12)throw new Exception("Invalid history number");long n=0;foreach(char c in input){int d=c>='0'&&c<='9'?c-'0':c>='a'&&c<='z'?c-'a'+10:-1;if(d<0||n>(long.MaxValue-d)/36)throw new Exception("Invalid history number");n=n*36+d;}return n;}
  int FetchHistory(string reg,string rule,string fact,string dir){

@@ -62,14 +62,15 @@ local function render()
   for i,row in ipairs(rows) do
     local v=results[offset+i]
     if v then
-      row.entry=v;row.name:SetText(v.mob.name);row.level:SetText(v.mob.level);row.zone:SetText(v.mob.location);row.value:SetText(money(v.gross));row.score:SetText(points(v.score));row.coverage:SetText(v.scored..'/'..#v.mob.drops);row:Show()
+      row.entry=v;row.name:SetText(v.mob.name);row.level:SetText(v.mob.level);row.zone:SetText(v.mob.location);row.value:SetText(money(v.gross));row.score:SetText(points(v.score));row.coverage:SetText(v.scored..'/'..#v.mob.drops);row.map:SetText(core.FarmHasSpawnReferences and core.FarmHasSpawnReferences(v.id) and 'Map' or 'No pins');row:Show()
     else row.entry=nil;row:Hide() end
   end
   footer:SetText(#results==0 and 'No results with the current filters and price data.' or ((offset+1)..'-'..math.min(offset+PAGE,#results)..' of '..#results..' | Coverage: scored drops / recorded drops (20+ observations).'))
   renderDetail()
 end
-local function refresh()
+local function refresh(preserve)
   if not panel or not panel:IsShown() then return end
+  local previous,previousOffset,previousDetail=preserve and selected or nil,offset,detailOffset
   local input=levelBox:GetText();local maxLevel=tonumber(input)
   if input=='' or maxLevel==0 then maxLevel=math.huge elseif not maxLevel or maxLevel<0 then status:SetText('Enter a maximum level, or leave it blank for all levels.');results={};render();return end
   prices={}
@@ -102,6 +103,14 @@ local function refresh()
     return x>y
   end)
   offset=0
+  if preserve then
+    offset=previousOffset
+    if previous then
+      for _,entry in ipairs(results) do if entry.id==previous.id then selected=entry;break end end
+      if not selected then selected=previous end
+      detailOffset=previousDetail
+    end
+  end
   local age=book.observed and math.max(0,math.floor(((GetServerTime and GetServerTime() or time())-book.observed)/60)) or nil
   status:SetText('Last scan: '..(age and (age..' min ago') or 'age unknown')..' | '..(infoMarket==activityMarket and activityMarket and ('Demand: '..activityMarket) or ('Demand unavailable: '..tostring(activityError or 'run updater'))))
   sortButton:SetText(sortMode=='score' and 'Sort: Score' or 'Sort: Value');render()
@@ -133,11 +142,12 @@ function core.CreateFarmPanel(parent)
   if panel then return panel end
   panel=CreateFrame('Frame',nil,parent);panel:SetAllPoints();panel:Hide()
   label(panel,18,-73,550,'GameFontNormalLarge'):SetText('FARM  |  MONSTER LOOT')
+  label(panel,280,-77,270,'GameFontHighlightSmall'):SetText('|cff9db9a5Map requires the OpenMap addon|r')
   label(panel,18,-108,60):SetText('Max level')
   levelBox=CreateFrame('EditBox',nil,panel,'InputBoxTemplate');levelBox:SetSize(42,24);levelBox:SetPoint('TOPLEFT',panel,'TOPLEFT',88,-102);levelBox:SetAutoFocus(false);levelBox:SetNumeric(true);levelBox:SetMaxLetters(3);levelBox:SetText(tostring(math.max(1,UnitLevel('player') or 1)))
   label(panel,148,-108,40):SetText('Search')
   searchBox=CreateFrame('EditBox',nil,panel,'InputBoxTemplate');searchBox:SetSize(115,24);searchBox:SetPoint('TOPLEFT',panel,'TOPLEFT',195,-102);searchBox:SetAutoFocus(false);searchBox:SetMaxLetters(60)
-  button(panel,'Refresh',325,-102,75,refresh)
+  button(panel,'Refresh',325,-102,75,function()refresh()end)
   sortButton=button(panel,'Sort: Score',410,-102,105,function()sortMode=sortMode=='score' and 'gross' or 'score';refresh()end)
   local help=button(panel,'?',525,-102,28,function()end)
   help:SetScript('OnEnter',function(s)if GameTooltip then GameTooltip:SetOwner(s,'ANCHOR_RIGHT');GameTooltip:AddLine('Farm score');GameTooltip:AddLine('0–100 versus the best eligible monster. Volume weight is estimated sales/day divided by 300, capped at 100%: 16/day gets 5%, 150/day gets 50%, and 300/day or more gets full weight. Listed supply is not used. This is a ranking heuristic, not a sale probability.',1,1,1,true);GameTooltip:AddLine('Missing demand is excluded; zero sales scores zero. Uncertain drop rates are discounted. Coverage shows how many drops contributed.',1,.8,.3,true);GameTooltip:Show()end end)
@@ -168,6 +178,7 @@ function core.CreateFarmPanel(parent)
   end
   local function showMap(row)
     if not row.entry then return end
+    if not selected or selected.id~=row.entry.id then selected=row.entry;detailOffset=0;renderDetail() end
     local zones=core.FarmMapZones(row.entry.mob.location)
     if #zones==0 then status:SetText('No matching map is available for this creature’s recorded locations.');return end
     if #zones==1 then local ok,err=core.FarmMapOpen(row.entry.id,zones[1]);if not ok then status:SetText(err) end;return end
@@ -179,7 +190,7 @@ function core.CreateFarmPanel(parent)
     local row=CreateFrame('Button',nil,panel,'BackdropTemplate');row:SetPoint('TOPLEFT',panel,'TOPLEFT',14,-172-(i-1)*23);row:SetSize(590,22);row:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8'});row:SetBackdropColor(i%2==0 and .12 or .08,.12,.12,.95)
     row.name=label(row,4,-4,152);row.level=label(row,161,-4,42);row.zone=label(row,206,-4,125);row.value=label(row,336,-4,72);row.score=label(row,411,-4,72);row.coverage=label(row,491,-4,90)
     row.map=button(row,'Map',0,0,50,function()showMap(row)end);row.map:ClearAllPoints();row.map:SetPoint('RIGHT',row,'RIGHT',-2,0);row.map:SetSize(48,20)
-    row.map:SetScript('OnEnter',function(s)if GameTooltip then GameTooltip:SetOwner(s,'ANCHOR_RIGHT');GameTooltip:AddLine('Show locations on OpenMap');GameTooltip:AddLine('Choose a recorded zone. Markers show Classic spawn references and may differ in Forever.',1,1,1,true);GameTooltip:Show()end end);row.map:SetScript('OnLeave',function()if GameTooltip then GameTooltip:Hide()end end)
+    row.map:SetScript('OnEnter',function(s)if GameTooltip then GameTooltip:SetOwner(s,'ANCHOR_RIGHT');GameTooltip:AddLine('Open recorded location on OpenMap');GameTooltip:AddLine('Requires the OpenMap addon to be installed and enabled.',1,1,1,true);if row.entry and core.FarmHasSpawnReferences and core.FarmHasSpawnReferences(row.entry.id) then GameTooltip:AddLine('Classic spawn references exist for this creature, but may not cover every listed zone or match Forever.',1,1,1,true) else GameTooltip:AddLine('No spawn coordinates were captured for this creature. The map can still open its recorded zone without markers.',1,.8,.3,true) end;GameTooltip:Show()end end);row.map:SetScript('OnLeave',function()if GameTooltip then GameTooltip:Hide()end end)
     row:SetScript('OnClick',function(s)mapMenu:Hide();selected=s.entry;detailOffset=0;renderDetail()end);rows[i]=row
   end
   footer=label(panel,18,-316,590)
@@ -218,7 +229,7 @@ function core.CreateFarmPanel(parent)
   end
   panel:SetScript('OnSizeChanged',layout)
   layout()
-  panel:SetScript('OnShow',refresh)
+  panel:SetScript('OnShow',function()refresh(true)end)
   return panel
 end
-core.Subscribe(function(event)if event=='complete' and panel and panel:IsShown() then refresh()end end)
+core.Subscribe(function(event)if event=='complete' and panel and panel:IsShown() then refresh(true)end end)

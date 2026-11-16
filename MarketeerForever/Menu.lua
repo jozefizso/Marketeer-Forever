@@ -1,5 +1,6 @@
 local core=MarketeerForeverCore
 local frame,mini,coinCheck,bag,history,farm,lookup,recipes,bagTab,historyTab,farmTab,lookupTab,recipesTab
+local lastTab='bag'
 local function text(parent,template,x,y,width)
   local f=parent:CreateFontString(nil,'OVERLAY',template);f:SetPoint('TOPLEFT',x,y);if width then f:SetWidth(width);f:SetJustifyH('LEFT') end;return f
 end
@@ -42,7 +43,7 @@ local function build()
   farm=core.CreateFarmPanel(content)
   lookup=core.CreateFarmLookupPanel(content)
   recipes=core.CreateRecipeBrowser(content)
-  local function selectTab(which) local h=which=='history';local f=which=='farm';local l=which=='lookup';local r=which=='recipes';bag:SetShown(not h and not f and not l and not r);history:SetShown(h);farm:SetShown(f);lookup:SetShown(l);recipes:SetShown(r);bagTab:SetAlpha(not h and not f and not l and not r and 1 or .65);historyTab:SetAlpha(h and 1 or .65);farmTab:SetAlpha(f and 1 or .65);lookupTab:SetAlpha(l and 1 or .65);recipesTab:SetAlpha(r and 1 or .65);if h then history:Refresh() end end
+  local function selectTab(which) lastTab=which;local h=which=='history';local f=which=='farm';local l=which=='lookup';local r=which=='recipes';bag:SetShown(not h and not f and not l and not r);history:SetShown(h);farm:SetShown(f);lookup:SetShown(l);recipes:SetShown(r);bagTab:SetAlpha(not h and not f and not l and not r and 1 or .65);historyTab:SetAlpha(h and 1 or .65);farmTab:SetAlpha(f and 1 or .65);lookupTab:SetAlpha(l and 1 or .65);recipesTab:SetAlpha(r and 1 or .65);if h then history:Refresh() end end
   bagTab=button(frame,'Bag tools',10,-85,130,function()selectTab('bag')end)
   historyTab=button(frame,'Market history',10,-118,130,function()selectTab('history')end)
   farmTab=button(frame,'Farm',10,-151,130,function()selectTab('farm')end)
@@ -52,7 +53,7 @@ local function build()
   frame:SetScript('OnShow',function()coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true)end)
   frame:Hide()
 end
-function core.OpenTradingMenu(tab,id,level) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab((tab=='history' or tab=='farm' or tab=='lookup' or tab=='recipes') and tab or 'bag');if tab=='history' and id then history:SetItem(id) elseif tab=='lookup' and id then lookup:SetItem(id) elseif tab=='farm' and id then core.SelectFarmMonster(id,level) elseif tab=='recipes' and id then recipes:SetItem(id) end end
+function core.OpenTradingMenu(tab,id,level) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab((tab=='bag' or tab=='history' or tab=='farm' or tab=='lookup' or tab=='recipes') and tab or lastTab);if tab=='history' and id then history:SetItem(id) elseif tab=='lookup' and id then lookup:SetItem(id) elseif tab=='farm' and id then core.SelectFarmMonster(id,level) elseif tab=='recipes' and id then recipes:SetItem(id) end end
 function core.ShowMarketHistory(id) core.OpenTradingMenu('history',id) end
 function core.ShowItemDrops(id) core.OpenTradingMenu('lookup',tonumber(id)) end
 function core.ShowFarmMonster(id,level) core.OpenTradingMenu('farm',tonumber(id),level) end

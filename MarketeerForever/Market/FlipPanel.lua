@@ -8,7 +8,7 @@ local scrollOffset, sortMode, selectedID = 0, "gain", nil
 local scrollbar, updatingScrollbar
 local viewMode, modeButton, headerTexts, flipControls, title, subtitle = "flips", nil, {}, {}, nil, nil
 local marketViewMode="flips"
-local selectedItem,resaleCheckButton,resaleViewButton
+local selectedItem,resaleCheckButton,resaleViewButton,wowheadButton,shoppingButton
 local openResale,checkResaleItem,tryOpenResale
 local returningFromResaleView,skipNextMarketRefresh,resaleReturnItem=false,false,nil
 local resaleQueue,resaleIndex,resaleEpoch,resaleChecked,resaleUnavailable,resaleUnknown={},1,0,0,0,0
@@ -93,6 +93,12 @@ end
 local function setSelected(item)
   selectedID = item and (item.key or item.id) or nil
   selectedItem=item
+  if shoppingButton then shoppingButton:SetShown(item and (viewMode=='flips' or viewMode=='lookup') and item.cost~=nil) end
+  for i,row in ipairs(rows) do
+    local active=row.item and selectedID and (row.item.key or row.item.id)==selectedID
+    if active then row:SetBackdropColor(.18,.34,.26,1) else row:SetBackdropColor(i%2==0 and .10 or .075,.10,.11,.95) end
+  end
+  if wowheadButton then wowheadButton:SetShown(item and type(item.id)=='number' and item.id>0) end
   if resaleCheckButton then resaleCheckButton:SetEnabled(item~=nil and not item.checking) end
   if resaleViewButton then resaleViewButton:SetEnabled(item~=nil) end
   if not item then
@@ -144,6 +150,8 @@ local function render()
   for i, row in ipairs(rows) do
     local item = filtered[scrollOffset + i]
     row.item = item
+    local active=item and selectedID and (item.key or item.id)==selectedID
+    if active then row:SetBackdropColor(.18,.34,.26,1) else row:SetBackdropColor(i%2==0 and .10 or .075,.10,.11,.95) end
     if item then
       if viewMode=="flips" then
         row.name:SetWidth(155);row.name:SetText(item.name)
@@ -548,6 +556,10 @@ local function createPanel()
   pageText=makeText(panel,nil,18,-391,450,"GameFontHighlightSmall")
   detailTitle=makeText(panel,nil,18,-416,850,"GameFontNormalSmall")
   detailBody=makeText(panel,nil,18,-432,850,"GameFontHighlightSmall");detailBody:SetWordWrap(true)
+  wowheadButton=CreateFrame('Button',nil,panel,'UIPanelButtonTemplate');wowheadButton:SetSize(120,23);wowheadButton:SetPoint('BOTTOMRIGHT',panel,'BOTTOMRIGHT',-20,18);wowheadButton:SetText('Wowhead link');wowheadButton:Hide()
+  wowheadButton:SetScript('OnClick',function()if selectedItem then MarketeerForeverCore.ShowWowheadLink(selectedItem.id) end end)
+  shoppingButton=CreateFrame('Button',nil,panel,'UIPanelButtonTemplate');shoppingButton:SetSize(150,23);shoppingButton:SetPoint('RIGHT',wowheadButton,'LEFT',-8,0);shoppingButton:SetText('Add to shopping list');shoppingButton:Hide()
+  shoppingButton:SetScript('OnClick',function()if selectedItem and MarketeerForeverCore.AddShoppingVendor then MarketeerForeverCore.AddShoppingVendor(selectedItem) end end)
   resaleCheckButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");resaleCheckButton:SetSize(105,22);resaleCheckButton:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-115,-411);resaleCheckButton:SetText("Recheck")
   resaleCheckButton:SetScript("OnClick",function()
     if viewMode=="resale" then checkResaleItem(selectedItem) end
@@ -582,7 +594,7 @@ local function createPanel()
     minSalesBox:SetText(tostring(craft and (MarketeerForeverMarketDB.craftMinSales or 1) or (MarketeerForeverMarketDB.flipMinSalesPerDay or 1)))
     minStackProfitBox:SetText(tostring(craft and (tonumber(MarketeerForeverMarketDB.craftMinProfit) or 0) or (tonumber(MarketeerForeverMarketDB.flipMinPackProfitSilver) or 0)))
     modeButton:SetShown(not craft)
-    modeButton:SetText(lookup and "Vendor flips" or resale and "Item lookup" or "Vendor resale")
+    modeButton:SetText(resale and "Vendor flips" or "Vendor resale")
     title:SetText(lookup and "ITEM LOOKUP" or resale and "SELL TO VENDOR" or craft and "CRAFTING PROFIT" or "VENDOR FLIP FINDER")
     subtitle:SetText(lookup and "Search loaded items by name, vendor or ID." or resale and "Automatically checks all listings priced below each item's vendor value." or craft and "AH material costs and profit per craft. Max 0 means no limit." or "One-pack vendor cost vs sell price. Max 0 means no limit.")
     local labels=resale and {"ITEM","AH / UNIT","VENDOR / UNIT","GAIN / UNIT","BUY QTY","BUY TOTAL","PROFIT TOTAL","VIEW"} or lookup and {"ITEM / VARIANT","VENDOR / UNIT","AH LOW / UNIT","LISTED","VENDOR PACK","EST. / DAY","","GAP"} or craft and {"RECIPE / PROFESSION","COST / CRAFT","SELL / UNIT","GAIN / CRAFT","YIELD","EST. / DAY","",""} or {"ITEM / VENDOR","BUY / UNIT","SELL / UNIT","GAIN / UNIT","GAIN / PACK","EST. / DAY","LISTED","GAP"}
@@ -591,7 +603,7 @@ local function createPanel()
   end
   modeButton:SetScript("OnClick",function()
     if viewMode=="resale" and resaleCache then resaleCache.scrollOffset=scrollOffset;resaleCache.selectedID=selectedID end
-    viewMode=viewMode=="flips" and "resale" or viewMode=="resale" and "lookup" or "flips";marketViewMode=viewMode;scrollOffset=0
+    viewMode=viewMode=="flips" and "resale" or "flips";marketViewMode=viewMode;scrollOffset=0
     local preserve=viewMode=="resale" and resaleCache~=nil
     if preserve then results=resaleCache.results;filterAndSort(false);scrollOffset=resaleCache.scrollOffset or 0;selectedID=resaleCache.selectedID;updateResaleStatus() end
     applyMode(preserve)

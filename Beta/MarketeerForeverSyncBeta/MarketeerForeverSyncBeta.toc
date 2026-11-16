@@ -1,5 +1,6 @@
 ## Interface: 16001
 ## Title: Marketeer (beta) - Auction Sync Test
+## IconTexture: Interface\MoneyFrame\UI-GoldIcon
 ## Notes: Experimental peer-to-peer auction scan sharing. Requires Marketeer.
 ## Version: 0.1.0-beta
 ## Dependencies: MarketeerForever

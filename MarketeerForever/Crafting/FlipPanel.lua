@@ -4,7 +4,7 @@ local CRAFT_TAB_ID = "MarketeerForeverCraftCrafting"
 local applyMode
 local panel, tabLib, budgetBox, minSalesBox, minStackProfitBox, searchBox, sortButton, status, pageText, detailTitle, detailBody
 local rows, results, filtered = {}, {}, {}
-local selectedItem,materialPopup,materialTitle,materialRows,materialsButton,dropsButton
+local selectedItem,materialPopup,materialTitle,materialRows,materialsButton,dropsButton,wowheadButton,shoppingButton
 local scrollOffset, sortMode, selectedID = 0, "gain", nil
 local scrollbar, updatingScrollbar
 local viewMode, modeButton, headerTexts, flipControls, title, subtitle = "lookup", nil, {}, {}, nil, nil
@@ -50,10 +50,16 @@ local function makeText(parent, anchor, x, y, width, font)
 end
 local function setSelected(item)
   selectedItem=item
+  if shoppingButton then shoppingButton:SetShown(viewMode=='craft' and item and item.recipe~=nil) end
+  if wowheadButton then wowheadButton:SetShown(item and type(item.id)=='number' and item.id>0) end
   if materialPopup and materialPopup:IsShown() then materialPopup:Hide() end
   if materialsButton then materialsButton:SetShown(viewMode=="craft" and item and item.recipe~=nil) end
   if dropsButton then local saved=item and MarketeerForeverFarmLookup and MarketeerForeverFarmLookup.items[item.id];dropsButton:SetShown(saved and (#saved.drops+#(saved.sources or {}))>0) end
   selectedID = item and (item.key or item.id) or nil
+  for i,row in ipairs(rows) do
+    local active=row.item and selectedID and (row.item.key or row.item.id)==selectedID
+    if active then row:SetBackdropColor(.18,.34,.26,1) else row:SetBackdropColor(i%2==0 and .10 or .075,.10,.11,.95) end
+  end
   if not item then
     detailTitle:SetText("SELECT AN ITEM")
     detailBody:SetText("Choose a recipe to see its materials and profit details.")
@@ -97,6 +103,8 @@ local function render()
   for i, row in ipairs(rows) do
     local item = filtered[scrollOffset + i]
     row.item = item
+    local active=item and selectedID and (item.key or item.id)==selectedID
+    if active then row:SetBackdropColor(.18,.34,.26,1) else row:SetBackdropColor(i%2==0 and .10 or .075,.10,.11,.95) end
     if item then
       row.name:SetText(item.name .. "  |cff829494#" .. item.id .. "|r")
       if viewMode == "craft" then
@@ -376,17 +384,25 @@ local function createPanel()
   pageText=makeText(panel,nil,18,-391,450,"GameFontHighlightSmall")
   detailTitle=makeText(panel,nil,18,-416,850,"GameFontNormalSmall")
   detailBody=makeText(panel,nil,18,-432,850,"GameFontHighlightSmall");detailBody:SetWordWrap(true)
+  wowheadButton=CreateFrame('Button',nil,panel,'UIPanelButtonTemplate');wowheadButton:SetSize(120,23);wowheadButton:SetPoint('BOTTOMRIGHT',panel,'BOTTOMRIGHT',-20,18);wowheadButton:SetText('Wowhead link');wowheadButton:Hide()
+  wowheadButton:SetScript('OnClick',function()if selectedItem then MarketeerForeverCore.ShowWowheadLink(selectedItem.id) end end)
+  shoppingButton=CreateFrame('Button',nil,panel,'UIPanelButtonTemplate');shoppingButton:SetSize(150,23);shoppingButton:SetPoint('RIGHT',wowheadButton,'LEFT',-8,0);shoppingButton:SetText('Add to shopping list');shoppingButton:Hide()
+  shoppingButton:SetScript('OnClick',function()if selectedItem and selectedItem.recipe and MarketeerForeverCore.AddShoppingRecipe then MarketeerForeverCore.AddShoppingRecipe(selectedItem.recipe) end end)
   materialsButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");materialsButton:SetSize(100,23);materialsButton:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-128,-408);materialsButton:SetText("Materials");materialsButton:Hide()
   dropsButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");dropsButton:SetSize(100,23);dropsButton:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-20,-408);dropsButton:SetText("Find sources");dropsButton:Hide()
   dropsButton:SetScript("OnClick",function()if selectedItem and MarketeerForeverCore.ShowItemDrops then MarketeerForeverCore.ShowItemDrops(selectedItem.id) end end)
-  materialPopup=CreateFrame("Frame",nil,panel,"BackdropTemplate");materialPopup:SetSize(480,270);materialPopup:SetPoint("CENTER",panel,"CENTER",0,0);materialPopup:SetFrameLevel(panel:GetFrameLevel()+30);materialPopup:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});materialPopup:SetBackdropColor(.055,.075,.065,.99);materialPopup:SetBackdropBorderColor(.25,.48,.34,1);materialPopup:EnableMouse(true);materialPopup:Hide()
+  materialPopup=CreateFrame("Frame",nil,panel,"BackdropTemplate");materialPopup:SetSize(620,290);materialPopup:SetPoint("CENTER",panel,"CENTER",0,0);materialPopup:SetFrameLevel(panel:GetFrameLevel()+30);materialPopup:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});materialPopup:SetBackdropColor(.055,.075,.065,.99);materialPopup:SetBackdropBorderColor(.25,.48,.34,1);materialPopup:EnableMouse(true);materialPopup:Hide()
   materialTitle=makeText(materialPopup,nil,15,-14,400,"GameFontNormal")
   local closeMaterials=CreateFrame("Button",nil,materialPopup,"UIPanelButtonTemplate");closeMaterials:SetSize(26,22);closeMaterials:SetPoint("TOPRIGHT",materialPopup,"TOPRIGHT",-8,-8);closeMaterials:SetText("X");closeMaterials:SetScript("OnClick",function()materialPopup:Hide()end)
   makeText(materialPopup,nil,15,-40,440,"GameFontHighlightSmall"):SetText("Materials per craft. Find sources opens recorded item sources.")
+  local materialColumns={{'MATERIAL',2,220},{'AH / UNIT',230,85},{'COST / CRAFT',320,90}}
+  for _,col in ipairs(materialColumns) do makeText(materialPopup,nil,14+col[2],-62,col[3],"GameFontNormalSmall"):SetText(col[1]) end
   materialRows={}
   for i=1,8 do
-    local row=CreateFrame("Frame",nil,materialPopup);row:SetPoint("TOPLEFT",materialPopup,"TOPLEFT",14,-60-(i-1)*23);row:SetSize(450,22)
-    row.name=makeText(row,nil,2,-4,310,"GameFontHighlightSmall")
+    local row=CreateFrame("Frame",nil,materialPopup);row:SetPoint("TOPLEFT",materialPopup,"TOPLEFT",14,-79-(i-1)*23);row:SetSize(590,22)
+    row.name=makeText(row,nil,materialColumns[1][2],-4,materialColumns[1][3],"GameFontHighlightSmall")
+    row.unit=makeText(row,nil,materialColumns[2][2],-4,materialColumns[2][3],"GameFontHighlightSmall")
+    row.cost=makeText(row,nil,materialColumns[3][2],-4,materialColumns[3][3],"GameFontHighlightSmall")
     row.drops=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.drops:SetSize(100,21);row.drops:SetPoint("RIGHT",row,"RIGHT",0,0);row.drops:SetText("Find sources")
     row.drops:SetScript("OnClick",function()if row.itemID and MarketeerForeverCore.ShowItemDrops then MarketeerForeverCore.ShowItemDrops(row.itemID) end end);materialRows[i]=row
   end
@@ -397,7 +413,8 @@ local function createPanel()
     for i,row in ipairs(materialRows) do local m=selectedItem.recipe.materials[i];if m then
       local saved=MarketeerForeverFarmLookup and MarketeerForeverFarmLookup.items[m.id]
       local name=(GetItemInfo and GetItemInfo(m.id)) or (saved and saved.name) or m.name or ("Item #"..m.id)
-      row.itemID=m.id;row.name:SetText(tostring(m.quantity).." x "..name);row.drops:SetEnabled(saved and (#saved.drops+#(saved.sources or {}))>0 or false);row:Show()
+      local unit=selectedItem.prices and selectedItem.prices[m.id]
+      row.itemID=m.id;row.name:SetText(tostring(m.quantity).." x "..name);row.unit:SetText(copper(unit));row.cost:SetText(copper(type(unit)=='number' and type(m.quantity)=='number' and unit*m.quantity or nil));row.drops:SetEnabled(saved and (#saved.drops+#(saved.sources or {}))>0 or false);row:Show()
     else row.itemID=nil;row:Hide() end end
     materialPopup:Show()
   end)

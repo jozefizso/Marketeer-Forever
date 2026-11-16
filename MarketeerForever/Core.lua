@@ -360,3 +360,23 @@ function MarketeerForeverTabs:SetSelected(id)
     tab.host:Show()
   end
 end
+
+-- The game cannot launch a web browser; select the URL for the player to copy.
+local wowheadPopup,wowheadEdit
+function core.ShowWowheadLink(id)
+  id=tonumber(id);if not id or id<=0 or id~=math.floor(id) then return end
+  if not wowheadPopup then
+    wowheadPopup=CreateFrame('Frame','MarketeerForeverWowheadLink',UIParent,'BackdropTemplate')
+    wowheadPopup:SetSize(440,120);wowheadPopup:SetPoint('CENTER');wowheadPopup:SetFrameStrata('FULLSCREEN_DIALOG');wowheadPopup:SetClampedToScreen(true)
+    wowheadPopup:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});wowheadPopup:SetBackdropColor(.055,.075,.065,.98);wowheadPopup:SetBackdropBorderColor(.25,.48,.34,1)
+    local title=wowheadPopup:CreateFontString(nil,'OVERLAY','GameFontNormal');title:SetPoint('TOPLEFT',16,-16);title:SetText('WOWHEAD ITEM LINK')
+    local hint=wowheadPopup:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall');hint:SetPoint('TOPLEFT',16,-39);hint:SetText('Press Ctrl+C to copy, then paste into your browser.')
+    wowheadEdit=CreateFrame('EditBox',nil,wowheadPopup,'InputBoxTemplate');wowheadEdit:SetPoint('TOPLEFT',20,-65);wowheadEdit:SetSize(395,24);wowheadEdit:SetAutoFocus(false);wowheadEdit:SetMaxLetters(200)
+    wowheadEdit:SetScript('OnEscapePressed',function()wowheadPopup:Hide()end)
+    local close=CreateFrame('Button',nil,wowheadPopup,'UIPanelButtonTemplate');close:SetSize(26,22);close:SetPoint('TOPRIGHT',-8,-8);close:SetText('X');close:SetScript('OnClick',function()wowheadPopup:Hide()end)
+    wowheadPopup:SetScript('OnHide',function()wowheadEdit:ClearFocus()end)
+    core.RegisterEscapeFrame('MarketeerForeverWowheadLink')
+  end
+  wowheadEdit:SetText('https://www.wowhead.com/forever/item='..id)
+  wowheadPopup:Show();wowheadEdit:SetFocus();wowheadEdit:HighlightText()
+end

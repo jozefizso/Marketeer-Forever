@@ -19,7 +19,9 @@ local panel, summary, status, incoming, page, rows, scrollOffset, scrollbar, upd
 local requestedNames={}
 local expandedAuction
 local selectedAuctions={}
-local bulkCancel,selectAll,clearSelection
+local bulkCancel,selectAll,clearSelection,selectUndercut
+local approvedBatch=false
+local confirmedCancelled={}
 local pendingDeposit
 local depositHooks=setmetatable({},{__mode="k"})
 scrollOffset=0
@@ -66,6 +68,22 @@ local function itemName(item)
     requestedNames[key.itemID]=true;pcall(C_Item.RequestLoadItemDataByID,key.itemID)
   end
   return "Loading #"..tostring(key.itemID)
+end
+local function itemIcon(item)
+  local key=item.itemKey
+  if C_AuctionHouse and C_AuctionHouse.GetItemKeyInfo then
+    local ok,info=pcall(C_AuctionHouse.GetItemKeyInfo,key)
+    if ok and type(info)=='table' and info.iconFileID then return info.iconFileID end
+  end
+  if C_Item and C_Item.GetItemIconByID then
+    local ok,icon=pcall(C_Item.GetItemIconByID,key.itemID)
+    if ok and icon then return icon end
+  end
+  if GetItemIcon then
+    local ok,icon=pcall(GetItemIcon,item.itemLink or key.itemID)
+    if ok and icon then return icon end
+  end
+  return 134400 -- Question mark while item data is unavailable.
 end
 -- Owned commodity buyout is per unit; non-commodity buyout is for the stack.
 local function auctionValues(item)
@@ -154,6 +172,23 @@ end
 local function nextSelected()
   for _,item in ipairs(owned) do if item.auctionID and selectedAuctions[item.auctionID] then return item end end
 end
+local function selectedDeposits()
+  local total,unknown,count,ids=0,0,0,{}
+  for _,item in ipairs(owned) do if item.auctionID and selectedAuctions[item.auctionID] then
+    count=count+1;ids[#ids+1]=tostring(item.auctionID);local deposit=auctionDeposit(item)
+    if deposit~=nil then total=total+deposit else unknown=unknown+1 end
+  end end
+  table.sort(ids);return total,unknown,count,table.concat(ids,',')
+end
+local function cancelNext()
+  if not core.active or not state.ownedComplete or state.cancelPending or not C_AuctionHouse or not C_AuctionHouse.CancelAuction then return end
+  local item=nextSelected();if not item then approvedBatch=false;return end
+  if C_AuctionHouse.CanCancelAuction and not C_AuctionHouse.CanCancelAuction(item.auctionID) then print('Marketeer: this listing cannot be cancelled; refresh and review the selection.');approvedBatch=false;return end
+  if C_AuctionHouse.IsThrottledMessageSystemReady and not C_AuctionHouse.IsThrottledMessageSystemReady() then print('Marketeer: auction house is busy; try again shortly.');return end
+  local ok,err=pcall(C_AuctionHouse.CancelAuction,item.auctionID)
+  if not ok then approvedBatch=false;print('Marketeer: cancellation failed: '..tostring(err));return end
+  state.cancelPending=item.auctionID;state.cancelStarted=(GetServerTime and GetServerTime()) or time();state.needOwned=true;state.ownedRequested=nil
+end
 local function render()
   if not panel then return end
   local maxOffset=math.max(0,#owned-8)
@@ -171,7 +206,9 @@ local function render()
     incoming:SetText("Sold, payment on the way: "..(unknown>0 and amount==0 and "--" or ((unknown>0 and "at least " or "")..formatMoney(amount))).." | Last AH check: "..(age and (age.."m ago") or "unknown").."; may have arrived"..(unknown>0 and (" | "..unknown.." amount(s) unavailable") or ""))
   else incoming:SetText("Sold, payment on the way: -- | Waiting for a complete auction update") end
   local selected=selectedCount()
-  if bulkCancel then bulkCancel:SetText("Cancel next ("..selected..")");bulkCancel:SetEnabled(core.active and state.ownedComplete and not state.cancelPending and selected>0) end
+  if selected==0 then approvedBatch=false end
+  if bulkCancel then bulkCancel:SetText((approvedBatch and 'Cancel next (' or 'Review selected (')..selected..')');bulkCancel:SetEnabled(core.active and state.ownedComplete and not state.cancelPending and selected>0) end
+  if selectUndercut then selectUndercut:SetEnabled(core.active and state.ownedComplete and not state.cancelPending) end
   if selectAll then selectAll:SetEnabled(core.active and state.ownedComplete and not state.cancelPending and #owned>0) end
   if clearSelection then clearSelection:SetEnabled(not state.cancelPending and selected>0) end
   local rowY=-124
@@ -185,7 +222,7 @@ local function render()
       local unit,total=auctionValues(item)
       local condition,ahead=comparison(item)
       local marketLow=lowestPrice(item.itemKey and competitions[keyString(item.itemKey)])
-      row.name:SetText(name);row.quantity:SetText(tostring(item.quantity or "?"));row.unit:SetText(formatMoney(unit));row.total:SetText(formatMoney(total));row.low:SetText(formatMoney(marketLow));row.state:SetText(condition=="no lower price" and "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t" or condition);row.ahead:SetText(ahead~=nil and tostring(ahead) or "--");row.deposit:SetText(formatMoney(auctionDeposit(item)));row.time:SetText(timeLeft(item))
+      row.icon:SetTexture(itemIcon(item));row.name:SetText(name);row.quantity:SetText(tostring(item.quantity or "?"));row.unit:SetText(formatMoney(unit));row.total:SetText(formatMoney(total));row.low:SetText(formatMoney(marketLow));row.state:SetText(condition=="no lower price" and "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t" or condition);row.ahead:SetText(ahead~=nil and tostring(ahead) or "--");row.deposit:SetText(formatMoney(auctionDeposit(item)));row.time:SetText(timeLeft(item))
       row.state:SetTextColor(condition=="undercut" and 1 or .75,condition=="undercut" and .3 or .85,.4)
       row.select:SetChecked(selectedAuctions[item.auctionID] and true or false);row.select:SetEnabled(core.active and state.ownedComplete and not state.cancelPending)
       row.expand:SetText(expanded and "-" or "+");row.detail:SetShown(expanded)
@@ -210,19 +247,23 @@ local function render()
     else row:Hide() end
   end
   page:ClearAllPoints();page:SetPoint("TOPLEFT",panel,"TOPLEFT",16,rowY-8)
-  status:SetText(#owned.." active auctions | "..(state.cancelPending and "Refreshing after cancellation..." or selected>0 and (selected.." selected: click Cancel next once per auction. Deposits may be lost.") or state.search and "Checking competition..." or (#state.queue>0 and state.index<=#state.queue and "Competition scan queued" or (#state.queue>0 and "Competition checks complete" or "Use Scan market to refresh comparisons"))))
+  status:SetText(#owned.." active auctions | "..(state.cancelPending and "Refreshing after cancellation..." or selected>0 and (selected..(approvedBatch and " approved: click Cancel next once per auction." or " selected: review deposits before cancelling.")) or state.search and "Checking competition..." or (#state.queue>0 and state.index<=#state.queue and "Competition scan queued" or (#state.queue>0 and "Competition checks complete" or "Use Scan market to refresh comparisons"))))
   page:SetText((#owned==0 and "No listings" or ((scrollOffset+1).."-"..math.min(scrollOffset+8,#owned).." of "..#owned)).."  |  Scroll to browse  |  Market low can include yours  |  -- = unavailable")
 end
 local function refreshOwned(fromOwnedUpdate)
   if not core.active or not C_AuctionHouse or not C_AuctionHouse.GetNumOwnedAuctions or not C_AuctionHouse.GetOwnedAuctionInfo then return end
+  local complete=not C_AuctionHouse.HasFullOwnedAuctionResults or C_AuctionHouse.HasFullOwnedAuctionResults()
+  -- Keep the last complete list during an approved batch; a partial refresh
+  -- must not replace it or temporarily disable the next confirmed cancellation.
+  if not complete and approvedBatch and not state.cancelPending and state.ownedComplete then return end
   local result,allRows={},{};local totalRows=C_AuctionHouse.GetNumOwnedAuctions() or 0
   for i=1,totalRows do
     local row=C_AuctionHouse.GetOwnedAuctionInfo(i)
     if type(row)=="table" then allRows[#allRows+1]=row end
-    if type(row)=="table" and row.itemKey and row.auctionID and (row.status==nil or row.status==0 or (Enum and Enum.AuctionStatus and row.status==Enum.AuctionStatus.Active)) then result[#result+1]=row end
+    if type(row)=="table" and row.itemKey and row.auctionID and not confirmedCancelled[row.auctionID] and (row.status==nil or row.status==0 or (Enum and Enum.AuctionStatus and row.status==Enum.AuctionStatus.Active)) then result[#result+1]=row end
   end
   owned=result;scrollOffset=math.min(scrollOffset,math.max(0,#owned-8));render()
-  state.ownedComplete=not C_AuctionHouse.HasFullOwnedAuctionResults or C_AuctionHouse.HasFullOwnedAuctionResults()
+  state.ownedComplete=complete
   if state.ownedComplete then
     local present={};for _,item in ipairs(owned) do present[item.auctionID]=true end
     for id in pairs(selectedAuctions) do if not present[id] then selectedAuctions[id]=nil end end
@@ -257,6 +298,13 @@ local function createPanel()
   core.RegisterEscapeFrame("MarketeerForeverCancelConfirmation");confirm:Hide()
   panel:SetScript("OnHide",function() confirm:Hide();if previousWidth and previousHeight then AuctionHouseFrame:SetSize(previousWidth,previousHeight) end;previousWidth=nil;previousHeight=nil end)
   accept:SetScript("OnClick",function()
+    if confirm.batch then
+      confirm:Hide();confirm.batch=nil
+      if not core.active or not state.ownedComplete or state.cancelPending then return end
+      local total,unknown,count,ids=selectedDeposits()
+      if count==0 or count~=confirm.count or total~=confirm.total or unknown~=confirm.unknown or ids~=confirm.ids then print('Marketeer: selection or deposits changed; review again.');return end
+      approvedBatch=true;cancelNext();render();return
+    end
     local id=confirm.auctionID;confirm:Hide()
     if not core.active or state.cancelPending or not C_AuctionHouse or not C_AuctionHouse.CancelAuction then return end
     local found=false;for _,auction in ipairs(owned) do if auction.auctionID==id then found=true;break end end
@@ -268,19 +316,19 @@ local function createPanel()
   local title=panel:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",panel,"TOPLEFT",16,-12);title:SetText("YOUR AUCTIONS")
   local scan=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");scan:SetSize(120,24);scan:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-20,-8);scan:SetText("Scan market");scan:SetScript("OnClick",function() local ok,err=core.Scan();if not ok then print("Marketeer: "..tostring(err)) end end)
   selectAll=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");selectAll:SetSize(85,24);selectAll:SetPoint("TOPLEFT",panel,"TOPLEFT",230,-8);selectAll:SetText("Select all")
-  selectAll:SetScript("OnClick",function() if not core.active or not state.ownedComplete or state.cancelPending then return end;for _,item in ipairs(owned) do if item.auctionID then selectedAuctions[item.auctionID]=true end end;render() end)
+  selectAll:SetScript("OnClick",function() if not core.active or not state.ownedComplete or state.cancelPending then return end;approvedBatch=false;for _,item in ipairs(owned) do if item.auctionID then selectedAuctions[item.auctionID]=true end end;render() end)
   clearSelection=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");clearSelection:SetSize(70,24);clearSelection:SetPoint("LEFT",selectAll,"RIGHT",5,0);clearSelection:SetText("Clear")
-  clearSelection:SetScript("OnClick",function() if state.cancelPending then return end;selectedAuctions={};render() end)
+  clearSelection:SetScript("OnClick",function() if state.cancelPending then return end;approvedBatch=false;selectedAuctions={};render() end)
   bulkCancel=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");bulkCancel:SetSize(130,24);bulkCancel:SetPoint("LEFT",clearSelection,"RIGHT",5,0)
   bulkCancel:SetScript("OnClick",function()
-    if not core.active or not state.ownedComplete or state.cancelPending or not C_AuctionHouse or not C_AuctionHouse.CancelAuction then return end
-    local item=nextSelected();if not item then render();return end
-    if C_AuctionHouse.CanCancelAuction and not C_AuctionHouse.CanCancelAuction(item.auctionID) then print("Marketeer: this listing cannot be cancelled. Clear it from the selection or refresh auctions.");return end
-    if C_AuctionHouse.IsThrottledMessageSystemReady and not C_AuctionHouse.IsThrottledMessageSystemReady() then print("Marketeer: auction house is busy; try again shortly.");return end
-    local ok,err=pcall(C_AuctionHouse.CancelAuction,item.auctionID)
-    if not ok then print("Marketeer: cancellation failed: "..tostring(err));return end
-    state.cancelPending=item.auctionID;state.cancelStarted=(GetServerTime and GetServerTime()) or time();state.needOwned=true;state.ownedRequested=nil;render()
+    if approvedBatch then cancelNext();render();return end
+    local total,unknown,count,ids=selectedDeposits();if count==0 then return end
+    confirm.batch=true;confirm.count=count;confirm.total=total;confirm.unknown=unknown;confirm.ids=ids
+    question:SetText('Cancel '..count..' selected auctions?\nKnown deposits lost: '..formatMoney(total)..(unknown>0 and (' | '..unknown..' unknown') or '')..'\nConfirm to start; each remaining cancellation needs a click.')
+    confirm:Show()
   end)
+  selectUndercut=CreateFrame('Button',nil,panel,'UIPanelButtonTemplate');selectUndercut:SetSize(145,24);selectUndercut:SetPoint('LEFT',bulkCancel,'RIGHT',5,0);selectUndercut:SetText('Select undercut')
+  selectUndercut:SetScript('OnClick',function()if not core.active or not state.ownedComplete or state.cancelPending then return end;approvedBatch=false;selectedAuctions={};for _,item in ipairs(owned) do if item.auctionID and comparison(item)=='undercut' then selectedAuctions[item.auctionID]=true end end;render() end)
   summary=rowText(panel,16,-40,700);status=rowText(panel,16,-60,700)
   incoming=rowText(panel,16,-80,850)
   local header=CreateFrame("Frame",nil,panel,"BackdropTemplate");header:SetPoint("TOPLEFT",panel,"TOPLEFT",12,-102);header:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-32,-102);header:SetHeight(21);header:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});header:SetBackdropColor(.13,.18,.17,1)
@@ -289,9 +337,10 @@ local function createPanel()
   for i=1,8 do
     local row=CreateFrame("Frame",nil,panel,"BackdropTemplate");row:SetPoint("TOPLEFT",panel,"TOPLEFT",12,-124-(i-1)*32);row:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-32,-124-(i-1)*32);row:SetHeight(30);row:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});row:SetBackdropColor(i%2==0 and .12 or .08,.12,.12,.95)
     row.select=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate");row.select:SetSize(23,23);row.select:SetPoint("TOPLEFT",row,"TOPLEFT",2,-3)
-    row.select:SetScript("OnClick",function(self) if row.item and row.item.auctionID and not state.cancelPending then selectedAuctions[row.item.auctionID]=self:GetChecked() and true or nil;render() end end)
+    row.select:SetScript("OnClick",function(self) if row.item and row.item.auctionID and not state.cancelPending then approvedBatch=false;selectedAuctions[row.item.auctionID]=self:GetChecked() and true or nil;render() end end)
     row.expand=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.expand:SetSize(18,20);row.expand:SetPoint("TOPLEFT",row,"TOPLEFT",27,-5);row.expand:SetText("+");row.expand:SetScript("OnClick",function() if row.item then if expandedAuction==row.item.auctionID then expandedAuction=nil else expandedAuction=row.item.auctionID end;render() end end)
-    row.name=rowText(row,49,-8,155);row.quantity=rowText(row,205,-8,65);row.unit=rowText(row,270,-8,80);row.total=rowText(row,350,-8,90);row.low=rowText(row,440,-8,85);row.state=rowText(row,525,-8,75);row.ahead=rowText(row,600,-8,65);row.deposit=rowText(row,665,-8,80);row.time=rowText(row,745,-8,60)
+    row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetSize(22,22);row.icon:SetPoint("TOPLEFT",row,"TOPLEFT",49,-4)
+    row.name=rowText(row,76,-8,128);row.quantity=rowText(row,205,-8,65);row.unit=rowText(row,270,-8,80);row.total=rowText(row,350,-8,90);row.low=rowText(row,440,-8,85);row.state=rowText(row,525,-8,75);row.ahead=rowText(row,600,-8,65);row.deposit=rowText(row,665,-8,80);row.time=rowText(row,745,-8,60)
     row.detail=rowText(row,25,-31,850);row.detail:SetWordWrap(true);row.detail:Hide()
     row.view=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.view:SetSize(50,22);row.view:SetPoint("TOPRIGHT",row,"TOPRIGHT",-60,-4);row.view:SetText("View");row.view:SetScript("OnClick",function()
       local item=row.item
@@ -308,7 +357,7 @@ local function createPanel()
     row.cancel=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.cancel:SetSize(54,22);row.cancel:SetPoint("TOPRIGHT",row,"TOPRIGHT",-4,-4);row.cancel:SetText("Cancel");row.cancel:SetScript("OnClick",function()
       local item=row.item
       if not item or state.cancelPending or not core.active or not C_AuctionHouse.CancelAuction then return end
-      confirm.auctionID=item.auctionID;question:SetText("Cancel the auction for "..itemName(item).."?");confirm:Show()
+      confirm.batch=nil;confirm.auctionID=item.auctionID;question:SetText("Cancel the auction for "..itemName(item).."?");confirm:Show()
     end)
     rows[i]=row
   end
@@ -367,6 +416,8 @@ end
 function core.OnBrowseComplete() if state.needChecks then refreshOwned() end end
 function core.OnScanStarted() state.autoScanPending=false;state.autoRetryAfter=nil end
 function core.OnOpen()
+  approvedBatch=false
+  confirmedCancelled={}
   owned={};competitions={};state.ownedComplete=false;state.needOwned=true;state.ownedRequested=nil;state.needChecks=true
   state.cancelPending=nil;state.cancelStarted=nil
   state.alerted=false;state.autoScanPending=core.AutoScanDue();state.opened=(GetServerTime and GetServerTime()) or time();state.scanPendingSince=state.opened;state.autoRetryAfter=nil
@@ -411,13 +462,16 @@ f:SetScript("OnEvent",function(_,event,arg)
     pendingDeposit=nil;state.ownedComplete=false;state.needOwned=true;state.ownedRequested=nil;if MarketeerForeverMarketOwnedChanged then MarketeerForeverMarketOwnedChanged() end;requestOwned()
   elseif event=="AUCTION_CANCELED" then
     local id=state.cancelPending
-    if id and (type(arg)~="number" or arg==id) then
+    local confirmed=id and type(arg)=='number' and arg==id
+    if confirmed then
+      confirmedCancelled[id]=true
       for i=#owned,1,-1 do if owned[i].auctionID==id then table.remove(owned,i) end end
       selectedAuctions[id]=nil
       if expandedAuction==id then expandedAuction=nil end
       state.cancelPending=nil;state.cancelStarted=nil;scrollOffset=math.min(scrollOffset,math.max(0,#owned-8));render()
     end
-    state.ownedComplete=false;state.needOwned=true;state.ownedRequested=nil;if MarketeerForeverMarketOwnedChanged then MarketeerForeverMarketOwnedChanged() end;requestOwned();render()
+    if not (confirmed and approvedBatch and state.ownedComplete) then state.ownedComplete=false end
+    state.needOwned=true;state.ownedRequested=nil;if MarketeerForeverMarketOwnedChanged then MarketeerForeverMarketOwnedChanged() end;requestOwned();render()
   elseif event=="GET_ITEM_INFO_RECEIVED" or event=="ITEM_KEY_ITEM_INFO_RECEIVED" then render()
   elseif event=="AUCTION_HOUSE_CLOSED" then selectedAuctions={};pendingDeposit=nil;state.queue={};state.index=1;state.search=nil;core.SetWorking("competition",false);core.SetWorking("pending",false)
   elseif state.search and ((state.search.commodity and (event=="COMMODITY_SEARCH_RESULTS_UPDATED" or event=="COMMODITY_SEARCH_RESULTS_ADDED") and arg==state.search.key.itemID) or (not state.search.commodity and (event=="ITEM_SEARCH_RESULTS_UPDATED" or event=="ITEM_SEARCH_RESULTS_ADDED") and type(arg)=="table" and keyString(arg)==state.search.keyString)) then state.search.seen=true;checkDone() end
@@ -427,7 +481,7 @@ local interval=0;f:SetScript("OnUpdate",function(_,delta)
   if state.needOwned and core.active then
     local n=(GetServerTime and GetServerTime()) or time()
     if state.cancelPending and state.cancelStarted and n-state.cancelStarted>20 then
-      state.cancelPending=nil;state.cancelStarted=nil;print("Marketeer: cancellation not confirmed; refreshing auctions. Check the listing before trying again.");render()
+      state.cancelPending=nil;state.cancelStarted=nil;approvedBatch=false;state.ownedComplete=false;state.ownedRequested=nil;print("Marketeer: cancellation not confirmed; refreshing auctions. Check the listing and review the selection before trying again.");render()
     end
     if not state.ownedRequested or n-state.ownedRequested>10 then requestOwned() end
   end
