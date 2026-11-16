@@ -1,5 +1,5 @@
 local core=MarketeerForeverCore
-local frame,mini,coinCheck,bag,history,farm,lookup,recipes,bagTab,historyTab,farmTab,lookupTab,recipesTab
+local frame,mini,coinCheck,bag,history,farm,lookup,recipes,auctionChat,bagTab,historyTab,farmTab,lookupTab,recipesTab,auctionChatTab
 local lastTab='bag'
 local function text(parent,template,x,y,width)
   local f=parent:CreateFontString(nil,'OVERLAY',template);f:SetPoint('TOPLEFT',x,y);if width then f:SetWidth(width);f:SetJustifyH('LEFT') end;return f
@@ -39,21 +39,31 @@ local function build()
   button(bag,'Bag selling rules',24,-265,160,function()if core.ToggleBagRules then core.ToggleBagRules() end end)
   button(bag,'Excluded items',192,-265,160,function()if core.ShowBagExclusions then core.ShowBagExclusions() end end)
   text(bag,'GameFontHighlightSmall',24,-310,550):SetText('The coin tooltip shows estimated bag value. Selling rules and exclusions use your existing settings.')
+  auctionChat=CreateFrame('Frame',nil,content);auctionChat:SetAllPoints()
+  text(auctionChat,'GameFontNormalLarge',22,-86,550):SetText('AUCTION CHAT')
+  text(auctionChat,'GameFontNormal',24,-129,550):SetText('|cffffd36aCHATTYNATOR IS OPTIONAL|r')
+  text(auctionChat,'GameFontHighlight',24,-158,550):SetText('Auction alerts also work with the standard WoW chat window.')
+  text(auctionChat,'GameFontHighlight',24,-187,550):SetText('Right-click the chat tab, open Settings, then choose Other and enable Auction House.')
+  text(auctionChat,'GameFontNormal',24,-244,550):SetText('CHATTYNATOR')
+  text(auctionChat,'GameFontHighlight',24,-273,550):SetText('If you use Chattynator, choose which of its tabs receive auction alerts.')
+  button(auctionChat,'Assign Chattynator tabs',24,-312,210,function()if core.ShowAuctionChatSettings then core.ShowAuctionChatSettings() else print('Marketeer: auction chat module did not load. Restart the game or reinstall the addon.') end end)
+  text(auctionChat,'GameFontHighlightSmall',24,-354,550):SetText('Allow Marketeer under Addons in each selected Chattynator tab’s filters.')
   history=core.CreateHistoryPanel(content)
   farm=core.CreateFarmPanel(content)
   lookup=core.CreateFarmLookupPanel(content)
   recipes=core.CreateRecipeBrowser(content)
-  local function selectTab(which) lastTab=which;local h=which=='history';local f=which=='farm';local l=which=='lookup';local r=which=='recipes';bag:SetShown(not h and not f and not l and not r);history:SetShown(h);farm:SetShown(f);lookup:SetShown(l);recipes:SetShown(r);bagTab:SetAlpha(not h and not f and not l and not r and 1 or .65);historyTab:SetAlpha(h and 1 or .65);farmTab:SetAlpha(f and 1 or .65);lookupTab:SetAlpha(l and 1 or .65);recipesTab:SetAlpha(r and 1 or .65);if h then history:Refresh() end end
+  local function selectTab(which) lastTab=which;local h=which=='history';local f=which=='farm';local l=which=='lookup';local r=which=='recipes';local a=which=='auctionchat';bag:SetShown(not h and not f and not l and not r and not a);history:SetShown(h);farm:SetShown(f);lookup:SetShown(l);recipes:SetShown(r);auctionChat:SetShown(a);bagTab:SetAlpha(not h and not f and not l and not r and not a and 1 or .65);historyTab:SetAlpha(h and 1 or .65);farmTab:SetAlpha(f and 1 or .65);lookupTab:SetAlpha(l and 1 or .65);recipesTab:SetAlpha(r and 1 or .65);auctionChatTab:SetAlpha(a and 1 or .65);if h then history:Refresh() end end
   bagTab=button(frame,'Bag tools',10,-85,130,function()selectTab('bag')end)
   historyTab=button(frame,'Market history',10,-118,130,function()selectTab('history')end)
   farmTab=button(frame,'Farm',10,-151,130,function()selectTab('farm')end)
   lookupTab=button(frame,'Find sources',10,-184,130,function()selectTab('lookup')end)
   recipesTab=button(frame,'Recipes',10,-217,130,function()selectTab('recipes')end)
+  auctionChatTab=button(frame,'Auction Chat',10,-250,130,function()selectTab('auctionchat')end)
   frame.selectTab=selectTab
   frame:SetScript('OnShow',function()coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true)end)
   frame:Hide()
 end
-function core.OpenTradingMenu(tab,id,level) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab((tab=='bag' or tab=='history' or tab=='farm' or tab=='lookup' or tab=='recipes') and tab or lastTab);if tab=='history' and id then history:SetItem(id) elseif tab=='lookup' and id then lookup:SetItem(id) elseif tab=='farm' and id then core.SelectFarmMonster(id,level) elseif tab=='recipes' and id then recipes:SetItem(id) end end
+function core.OpenTradingMenu(tab,id,level) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab((tab=='bag' or tab=='history' or tab=='farm' or tab=='lookup' or tab=='recipes' or tab=='auctionchat') and tab or lastTab);if tab=='history' and id then history:SetItem(id) elseif tab=='lookup' and id then lookup:SetItem(id) elseif tab=='farm' and id then core.SelectFarmMonster(id,level) elseif tab=='recipes' and id then recipes:SetItem(id) end end
 function core.ShowMarketHistory(id) core.OpenTradingMenu('history',id) end
 function core.ShowItemDrops(id) core.OpenTradingMenu('lookup',tonumber(id)) end
 function core.ShowFarmMonster(id,level) core.OpenTradingMenu('farm',tonumber(id),level) end
