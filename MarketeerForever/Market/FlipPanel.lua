@@ -1,4 +1,4 @@
--- Market Vision auction-house tab. Vendor observations are reference data.
+-- Vendor Flips auction-house tab. Vendor observations are reference data.
 local TAB_ID = "MarketeerForeverMarketFlips"
 local CRAFT_TAB_ID = "MarketeerForeverMarketCrafting"
 local applyMode
@@ -440,7 +440,7 @@ checkResaleItem=function(item,onComplete)
 end
 openResale=function(item)
   if viewMode~="resale" or not item then return end
-  if not AuctionHouseFrame.SelectBrowseResult then print("Market Vision: auction buy view unavailable.");return end
+  if not AuctionHouseFrame.SelectBrowseResult then print("Vendor Flips: auction buy view unavailable.");return end
   setSelected(item);resaleOpenRequest={item=item};MarketeerForeverCore.SetWorking("resaleView",true);updateResaleStatus()
   if resaleInflight and MarketeerForeverCore.CancelQueuedBuyout then MarketeerForeverCore.CancelQueuedBuyout("Deferred for View") end
   tryOpenResale()
@@ -448,21 +448,21 @@ end
 tryOpenResale=function()
   local request=resaleOpenRequest;if not request then return end
   local item=request.item
-  if item.soldOut or (item.live and item.unitGain<=0) then resaleOpenRequest=nil;MarketeerForeverCore.SetWorking("resaleView",false);updateResaleStatus();print("Market Vision: this item is sold out or no longer profitable to vendor.");return end
+  if item.soldOut or (item.live and item.unitGain<=0) then resaleOpenRequest=nil;MarketeerForeverCore.SetWorking("resaleView",false);updateResaleStatus();print("Vendor Flips: this item is sold out or no longer profitable to vendor.");return end
   if MarketeerForeverCore.phase~="idle" or MarketeerForeverCore.working.buyout or (MarketeerForeverCore.IsCompetitionSearchActive and MarketeerForeverCore.IsCompetitionSearchActive()) then return end
   local api=C_AuctionHouse
-  if not api or not api.GetItemKeyInfo then resaleOpenRequest=nil;MarketeerForeverCore.SetWorking("resaleView",false);updateResaleStatus();print("Market Vision: auction item details are unavailable.");return end
+  if not api or not api.GetItemKeyInfo then resaleOpenRequest=nil;MarketeerForeverCore.SetWorking("resaleView",false);updateResaleStatus();print("Vendor Flips: auction item details are unavailable.");return end
   local ok,info=pcall(api.GetItemKeyInfo,item.auctionKey)
   if not ok or type(info)~="table" or type(info.isCommodity)~="boolean" then
     local now=(GetServerTime and GetServerTime()) or time();request.loadStarted=request.loadStarted or now
     if not request.requested and C_Item and C_Item.RequestLoadItemDataByID then request.requested=true;pcall(C_Item.RequestLoadItemDataByID,item.id) end
-    if now-request.loadStarted>15 then resaleOpenRequest=nil;MarketeerForeverCore.SetWorking("resaleView",false);updateResaleStatus();print("Market Vision: item details did not load; try View again.") end
+    if now-request.loadStarted>15 then resaleOpenRequest=nil;MarketeerForeverCore.SetWorking("resaleView",false);updateResaleStatus();print("Vendor Flips: item details did not load; try View again.") end
     return
   end
   resaleOpenRequest=nil;returningFromResaleView=true;resaleReturnItem=item
   MarketeerForeverTabs:HideAll()
   local opened,err=pcall(AuctionHouseFrame.SelectBrowseResult,AuctionHouseFrame,{itemKey=item.auctionKey,minPrice=item.ah})
-  if not opened then returningFromResaleView=false;resaleReturnItem=nil;MarketeerForeverCore.SetWorking("resaleView",false);print("Market Vision: could not open item: "..tostring(err));if tabLib then tabLib:SetSelected(TAB_ID) end end
+  if not opened then returningFromResaleView=false;resaleReturnItem=nil;MarketeerForeverCore.SetWorking("resaleView",false);print("Vendor Flips: could not open item: "..tostring(err));if tabLib then tabLib:SetSelected(TAB_ID) end end
 end
 local function resaleVisible()
   if not panel or viewMode~="resale" then return false end
@@ -617,16 +617,16 @@ local function createPanel()
 end
 function MarketeerForeverMarketExplainItem(id)
   local scan=latestSnapshot()
-  if not scan then print("Market Vision: no completed market scan available."); return end
+  if not scan then print("Vendor Flips: no completed market scan available."); return end
   local lowest, quantity
   for _,row in ipairs(scan.rows or {}) do
     if row.itemID==id and (row.itemSuffix or 0)==0 and (row.battlePetSpeciesID or 0)==0 and type(row.price)=="number" and row.price>0 and (not lowest or row.price<lowest) then lowest=row.price;quantity=row.quantity end
   end
-  if not lowest then print("Market Vision: item " .. id .. " has no matching price in the last completed scan.");return end
+  if not lowest then print("Vendor Flips: item " .. id .. " has no matching price in the last completed scan.");return end
   local sell=math.floor(lowest)
   local remote=marketActivity(id,usableHistory())
-  print("Market Vision: item " .. id .. "; last scan low " .. copper(lowest) .. "; proposed sale " .. copper(sell) .. "; listed " .. tostring(quantity or "unknown") .. "; est/day " .. tostring(remote and remote.sales or "unknown") .. ".")
-  if sell<1 then print("Market Vision: no valid positive sale price.");return end
+  print("Vendor Flips: item " .. id .. "; last scan low " .. copper(lowest) .. "; proposed sale " .. copper(sell) .. "; listed " .. tostring(quantity or "unknown") .. "; est/day " .. tostring(remote and remote.sales or "unknown") .. ".")
+  if sell<1 then print("Vendor Flips: no valid positive sale price.");return end
   local budget=tonumber(MarketeerForeverMarketDB.flipBudgetSilver)
   if budget and budget>0 then budget=budget*100 else budget=nil end
   local minimum=tonumber(MarketeerForeverMarketDB.flipMinSalesPerDay) or 0
@@ -636,16 +636,16 @@ function MarketeerForeverMarketExplainItem(id)
       offers=offers+1
       local cost, stack=offer[4],offer[5]
       local gain=(type(cost)=="number" and type(stack)=="number" and stack>0) and (sell*0.95-cost/stack) or nil
-      print("Market Vision: " .. tostring(offer[3]) .. ": " .. copper(cost) .. " for " .. tostring(stack) .. "; estimated gain/unit " .. copper(gain) .. (cost and budget and cost>budget and " (over budget)" or "") .. ".")
+      print("Vendor Flips: " .. tostring(offer[3]) .. ": " .. copper(cost) .. " for " .. tostring(stack) .. "; estimated gain/unit " .. copper(gain) .. (cost and budget and cost>budget and " (over budget)" or "") .. ".")
       if offers>=3 then break end
     end
   end
-  if offers==0 then print("Market Vision: no vendor offer is in the bundled reference dataset.") end
+  if offers==0 then print("Vendor Flips: no vendor offer is in the bundled reference dataset.") end
   if minimum > 0 then
-    if not remote or type(remote.sales)~="number" then print("Market Vision: activity is unknown; the activity filter excludes this item.")
-    elseif remote.sales<minimum then print("Market Vision: estimated daily activity is below the configured minimum.") end
+    if not remote or type(remote.sales)~="number" then print("Vendor Flips: activity is unknown; the activity filter excludes this item.")
+    elseif remote.sales<minimum then print("Vendor Flips: estimated daily activity is below the configured minimum.") end
   end
-  print("Market Vision: also check the minimum pack gain and any active search text. Estimates exclude deposits.")
+  print("Vendor Flips: also check the minimum pack gain and any active search text. Estimates exclude deposits.")
 end
 local function registerTab()
   if tabLib or not AuctionHouseFrame or not MarketeerForeverTabs then return end
@@ -679,9 +679,9 @@ local function registerTab()
     return host
   end
   local success,err=pcall(function()
-    if not lib:DoesIDExist(TAB_ID) then lib:CreateTab(TAB_ID,makeHost("flips"),"Market Vision","Market Vision") end
+    if not lib:DoesIDExist(TAB_ID) then lib:CreateTab(TAB_ID,makeHost("flips"),"Vendor Flips","Vendor Flips") end
   end)
-  if success then tabLib=lib else print("Market Vision: tab registration failed: "..tostring(err)) end
+  if success then tabLib=lib else print("Vendor Flips: tab registration failed: "..tostring(err)) end
 end
 local events=CreateFrame("Frame")
 events:RegisterEvent("AUCTION_HOUSE_SHOW")
@@ -707,14 +707,14 @@ MarketeerForeverCore.Subscribe(function(event)
   if resaleVisible() then calculateResale() end
 end)
 function MarketeerForeverMarketShowCrafting()
-  if not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then print("Market Vision: open the auction house first.");return end
+  if not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then print("Vendor Flips: open the auction house first.");return end
   registerTab()
-  if tabLib then tabLib:SetSelected(CRAFT_TAB_ID) else print("Market Vision: auction tab not ready.") end
+  if tabLib then tabLib:SetSelected(CRAFT_TAB_ID) else print("Vendor Flips: auction tab not ready.") end
 end
 function MarketeerForeverMarketShowFlips()
-  if not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then print("Market Vision: open the auction house first.");return end
+  if not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then print("Vendor Flips: open the auction house first.");return end
   registerTab()
-  if tabLib then tabLib:SetSelected(TAB_ID) else print("Market Vision: auction tab not ready. Reopen the auction house.") end
+  if tabLib then tabLib:SetSelected(TAB_ID) else print("Vendor Flips: auction tab not ready. Reopen the auction house.") end
 end
 SLASH_MARKETEERFOREVERMARKETFLIPS1="/nokiunimflips"
 SlashCmdList.MARKETEERFOREVERMARKETFLIPS=MarketeerForeverMarketShowFlips

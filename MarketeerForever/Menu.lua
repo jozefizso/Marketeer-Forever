@@ -1,5 +1,5 @@
 local core=MarketeerForeverCore
-local frame,mini,coinCheck,bag,history,farm,lookup,recipes,auctionChat,hotkeys,bagTab,historyTab,farmTab,lookupTab,recipesTab,auctionChatTab,hotkeysTab
+local frame,mini,coinCheck,bag,history,farm,lookup,recipes,auctionChat,hotkeys,toggles,bagTab,historyTab,farmTab,lookupTab,recipesTab,auctionChatTab,hotkeysTab,togglesTab
 local lastTab='bag'
 local function text(parent,template,x,y,width)
   local f=parent:CreateFontString(nil,'OVERLAY',template);f:SetPoint('TOPLEFT',x,y);if width then f:SetWidth(width);f:SetJustifyH('LEFT') end;return f
@@ -8,6 +8,23 @@ local function button(parent,label,x,y,w,action)
   local b=CreateFrame('Button',nil,parent,'BackdropTemplate');b:SetSize(w,26);b:SetPoint('TOPLEFT',x,y);b:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});b:SetBackdropColor(.07,.09,.08,1);b:SetBackdropBorderColor(.20,.38,.28,1)
   local t=b:CreateFontString(nil,'OVERLAY','GameFontNormal');t:SetPoint('CENTER');t:SetText(label)
   b:SetScript('OnEnter',function(self)self:SetBackdropBorderColor(.30,.78,.48,1)end);b:SetScript('OnLeave',function(self)self:SetBackdropBorderColor(.20,.38,.28,1)end);b:SetScript('OnClick',action);return b
+end
+local discordPopup,discordEdit
+local function showDiscord()
+  if not discordPopup then
+    discordPopup=CreateFrame('Frame','MarketeerForeverDiscordInvite',UIParent,'BackdropTemplate')
+    discordPopup:SetSize(460,145);discordPopup:SetPoint('CENTER');discordPopup:SetFrameStrata('FULLSCREEN_DIALOG');discordPopup:SetClampedToScreen(true)
+    discordPopup:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});discordPopup:SetBackdropColor(.055,.075,.065,.98);discordPopup:SetBackdropBorderColor(.25,.48,.34,1)
+    text(discordPopup,'GameFontNormal',16,-16,400):SetText('JOIN THE MARKETEER DISCORD')
+    text(discordPopup,'GameFontHighlightSmall',16,-42,420):SetText('Join to ask questions, get help, and share feedback.')
+    text(discordPopup,'GameFontHighlightSmall',16,-60,420):SetText('Press Ctrl+C to copy the invite, then paste it into your browser.')
+    discordEdit=CreateFrame('EditBox',nil,discordPopup,'InputBoxTemplate');discordEdit:SetPoint('TOPLEFT',20,-93);discordEdit:SetSize(415,24);discordEdit:SetAutoFocus(false);discordEdit:SetMaxLetters(200)
+    discordEdit:SetScript('OnEscapePressed',function()discordPopup:Hide()end)
+    discordPopup:SetScript('OnHide',function()discordEdit:ClearFocus()end)
+    local close=CreateFrame('Button',nil,discordPopup,'UIPanelButtonTemplate');close:SetSize(26,22);close:SetPoint('TOPRIGHT',-8,-8);close:SetText('X');close:SetScript('OnClick',function()discordPopup:Hide()end)
+    core.RegisterEscapeFrame('MarketeerForeverDiscordInvite')
+  end
+  discordEdit:SetText('https://discord.gg/RhA3buwnY6');discordPopup:Show();discordEdit:SetFocus();discordEdit:HighlightText()
 end
 local function build()
   if frame then return end
@@ -22,6 +39,8 @@ local function build()
   local sidebar=frame:CreateTexture(nil,'BACKGROUND');sidebar:SetColorTexture(.035,.045,.04,1);sidebar:SetPoint('TOPLEFT');sidebar:SetPoint('BOTTOMLEFT');sidebar:SetWidth(150)
   local accent=frame:CreateTexture(nil,'ARTWORK');accent:SetColorTexture(.22,.65,.40,1);accent:SetPoint('TOPLEFT',frame,'TOPLEFT',150,-58);accent:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-1,-58);accent:SetHeight(1)
   text(frame,'GameFontNormalLarge',18,-22):SetText('|cff62d68eMARKETEER|r')
+  local discord=button(frame,'Discord',10,-53,130,showDiscord);discord:SetHeight(24)
+  local discordIcon=discord:CreateTexture(nil,'ARTWORK');discordIcon:SetSize(20,20);discordIcon:SetPoint('LEFT',discord,'LEFT',12,0);discordIcon:SetTexture('Interface\\AddOns\\MarketeerForever\\Assets\\Discord.tga')
   text(frame,'GameFontHighlightSmall',166,-25,560):SetText('|cff9db9a5Item: Alt+Right = sources / recipe   |   Alt+Left = history   |   Hold Shift = market details|r')
   local content=CreateFrame('Frame',nil,frame);content:SetPoint('TOPLEFT',frame,'TOPLEFT',150,0);content:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',0,0)
   local close=button(frame,'X',585,-14,28,function()frame:Hide()end);close:ClearAllPoints();close:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-15,-14);close:SetFrameLevel(frame:GetFrameLevel()+10)
@@ -67,15 +86,27 @@ local function build()
     choicesButtons[#choicesButtons+1]={button=b,key=key}
     b:SetScript('OnLeave',refreshHotkeys)
   end
-  local combatCheck=CreateFrame('CheckButton',nil,hotkeys,'UICheckButtonTemplate');combatCheck:SetPoint('TOPLEFT',20,-275);combatCheck:SetSize(30,30)
-  text(hotkeys,'GameFontHighlight',54,-282,500):SetText('Disable monster snapshot during combat')
+  hotkeys:SetScript('OnShow',refreshHotkeys)
+  toggles=CreateFrame('Frame',nil,content);toggles:SetAllPoints()
+  text(toggles,'GameFontNormalLarge',22,-86,550):SetText('TOGGLES')
+  local deferCheck=CreateFrame('CheckButton',nil,toggles,'UICheckButtonTemplate');deferCheck:SetPoint('TOPLEFT',20,-128);deferCheck:SetSize(30,30)
+  text(toggles,'GameFontHighlight',54,-135,530):SetText('Wait until I visit Your Auctions to check my listings')
+  text(toggles,'GameFontHighlightSmall',54,-162,520):SetText('When enabled, undercut and competition checks start after you open Your Auctions each time you visit the auction house. Market auto-scans use their own setting.')
+  deferCheck:SetScript('OnClick',function(s)MarketeerForeverCoreDB.deferListingChecks=s:GetChecked() and true or false;if core.OwnedChecksSettingChanged then core.OwnedChecksSettingChanged() end end)
+  local combatCheck=CreateFrame('CheckButton',nil,toggles,'UICheckButtonTemplate');combatCheck:SetPoint('TOPLEFT',20,-220);combatCheck:SetSize(30,30)
+  text(toggles,'GameFontHighlight',54,-227,500):SetText('Disable monster snapshot tooltip during combat')
+  text(toggles,'GameFontHighlightSmall',54,-254,520):SetText('Prevent the monster loot and market snapshot from opening while you are in combat. Change its activation key under Hotkeys.')
   combatCheck:SetScript('OnClick',function(s)MarketeerForeverCoreDB.farmHoverNoCombat=s:GetChecked() and true or false end)
-  hotkeys:SetScript('OnShow',function()refreshHotkeys();combatCheck:SetChecked(MarketeerForeverCoreDB.farmHoverNoCombat~=false)end)
+  local silenceCheck=CreateFrame('CheckButton',nil,toggles,'UICheckButtonTemplate');silenceCheck:SetPoint('TOPLEFT',20,-312);silenceCheck:SetSize(30,30)
+  text(toggles,'GameFontHighlight',54,-319,500):SetText('Silence Marketeer Data updater reminders')
+  text(toggles,'GameFontHighlightSmall',54,-346,520):SetText('Hide reminders about missing or outdated updater data. You can turn reminders back on here.')
+  silenceCheck:SetScript('OnClick',function(s)MarketeerForeverCoreDB.silenceUpdaterReminders=s:GetChecked() and true or false end)
+  toggles:SetScript('OnShow',function()deferCheck:SetChecked(MarketeerForeverCoreDB.deferListingChecks==true);combatCheck:SetChecked(MarketeerForeverCoreDB.farmHoverNoCombat~=false);silenceCheck:SetChecked(MarketeerForeverCoreDB.silenceUpdaterReminders==true)end)
   history=core.CreateHistoryPanel(content)
   farm=core.CreateFarmPanel(content)
   lookup=core.CreateFarmLookupPanel(content)
   recipes=core.CreateRecipeBrowser(content)
-  local function selectTab(which) lastTab=which;local h=which=='history';local f=which=='farm';local l=which=='lookup';local r=which=='recipes';local a=which=='auctionchat';local k=which=='hotkeys';bag:SetShown(not h and not f and not l and not r and not a and not k);history:SetShown(h);farm:SetShown(f);lookup:SetShown(l);recipes:SetShown(r);auctionChat:SetShown(a);hotkeys:SetShown(k);bagTab:SetAlpha(not h and not f and not l and not r and not a and not k and 1 or .65);historyTab:SetAlpha(h and 1 or .65);farmTab:SetAlpha(f and 1 or .65);lookupTab:SetAlpha(l and 1 or .65);recipesTab:SetAlpha(r and 1 or .65);auctionChatTab:SetAlpha(a and 1 or .65);hotkeysTab:SetAlpha(k and 1 or .65);if h then history:Refresh() end end
+  local function selectTab(which) lastTab=which;local h=which=='history';local f=which=='farm';local l=which=='lookup';local r=which=='recipes';local a=which=='auctionchat';local k=which=='hotkeys';local t=which=='toggles';bag:SetShown(not h and not f and not l and not r and not a and not k and not t);history:SetShown(h);farm:SetShown(f);lookup:SetShown(l);recipes:SetShown(r);auctionChat:SetShown(a);hotkeys:SetShown(k);toggles:SetShown(t);bagTab:SetAlpha(not h and not f and not l and not r and not a and not k and not t and 1 or .65);historyTab:SetAlpha(h and 1 or .65);farmTab:SetAlpha(f and 1 or .65);lookupTab:SetAlpha(l and 1 or .65);recipesTab:SetAlpha(r and 1 or .65);auctionChatTab:SetAlpha(a and 1 or .65);hotkeysTab:SetAlpha(k and 1 or .65);togglesTab:SetAlpha(t and 1 or .65);if h then history:Refresh() end end
   bagTab=button(frame,'Bag tools',10,-85,130,function()selectTab('bag')end)
   historyTab=button(frame,'Market history',10,-118,130,function()selectTab('history')end)
   farmTab=button(frame,'Farm',10,-151,130,function()selectTab('farm')end)
@@ -83,11 +114,12 @@ local function build()
   recipesTab=button(frame,'Recipes',10,-217,130,function()selectTab('recipes')end)
   auctionChatTab=button(frame,'Auction Chat',10,-250,130,function()selectTab('auctionchat')end)
   hotkeysTab=button(frame,'Hotkeys',10,-283,130,function()selectTab('hotkeys')end)
+  togglesTab=button(frame,'Toggles',10,-316,130,function()selectTab('toggles')end)
   frame.selectTab=selectTab
   frame:SetScript('OnShow',function()coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true)end)
   frame:Hide()
 end
-function core.OpenTradingMenu(tab,id,level) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab((tab=='bag' or tab=='history' or tab=='farm' or tab=='lookup' or tab=='recipes' or tab=='auctionchat' or tab=='hotkeys') and tab or lastTab);if tab=='history' and id then history:SetItem(id) elseif tab=='lookup' and id then lookup:SetItem(id) elseif tab=='farm' and id then core.SelectFarmMonster(id,level) elseif tab=='recipes' and id then recipes:SetItem(id) end end
+function core.OpenTradingMenu(tab,id,level) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab((tab=='bag' or tab=='history' or tab=='farm' or tab=='lookup' or tab=='recipes' or tab=='auctionchat' or tab=='hotkeys' or tab=='toggles') and tab or lastTab);if tab=='history' and id then history:SetItem(id) elseif tab=='lookup' and id then lookup:SetItem(id) elseif tab=='farm' and id then core.SelectFarmMonster(id,level) elseif tab=='recipes' and id then recipes:SetItem(id) end end
 function core.ShowMarketHistory(id) core.OpenTradingMenu('history',id) end
 function core.ShowItemDrops(id) core.OpenTradingMenu('lookup',tonumber(id)) end
 function core.ShowFarmMonster(id,level) core.OpenTradingMenu('farm',tonumber(id),level) end

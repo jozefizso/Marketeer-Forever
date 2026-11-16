@@ -15,6 +15,9 @@ function core.OwnedItemQuantity(id)
   return total
 end
 local startChecks
+local function checksAllowed()
+  return not (MarketeerForeverCoreDB and MarketeerForeverCoreDB.deferListingChecks) or state.visitedOwned
+end
 local panel, summary, status, incoming, page, rows, scrollOffset, scrollbar, updatingScrollbar
 local requestedNames={}
 local expandedAuction
@@ -273,9 +276,12 @@ local function refreshOwned(fromOwnedUpdate)
   if state.cancelPending then for _,auction in ipairs(owned) do if auction.auctionID==state.cancelPending then stillListed=true;break end end end
   if state.ownedComplete and state.cancelPending and not stillListed then state.cancelPending=nil;state.cancelStarted=nil end
   if state.ownedComplete and not state.cancelPending then state.needOwned=false end
-  if state.ownedComplete and state.needChecks and startChecks then state.needChecks=false;startChecks() end
+  if state.ownedComplete and state.needChecks and startChecks and checksAllowed() then state.needChecks=false;startChecks() end
   render()
   if MarketeerForeverMarketOwnedChanged then MarketeerForeverMarketOwnedChanged() end
+end
+function core.OwnedChecksSettingChanged()
+  if core.active and state.needChecks and checksAllowed() then refreshOwned() end
 end
 local function requestOwned()
   if not core.active or not C_AuctionHouse or not C_AuctionHouse.QueryOwnedAuctions then return end
@@ -288,7 +294,7 @@ local function createPanel()
   if panel or not AuctionHouseFrame or not MarketeerForeverTabs then return end
   panel=CreateFrame("Frame",nil,AuctionHouseFrame,"BackdropTemplate");panel:Hide();panel:SetPoint("TOPLEFT",AuctionHouseFrame,"TOPLEFT",12,-75);panel:SetPoint("BOTTOMRIGHT",AuctionHouseFrame,"BOTTOMRIGHT",-12,35);panel:SetFrameStrata("DIALOG");panel:SetFrameLevel(AuctionHouseFrame:GetFrameLevel()+50);panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});panel:SetBackdropColor(.055,.065,.07,1);panel:SetBackdropBorderColor(.24,.30,.28,1)
   local previousWidth,previousHeight
-  panel:SetScript("OnShow",function() if not previousWidth then previousWidth,previousHeight=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(previousWidth+220,previousHeight+180) end end)
+  panel:SetScript("OnShow",function() if not previousWidth then previousWidth,previousHeight=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(previousWidth+220,previousHeight+180) end;if core.active then state.visitedOwned=true;if state.needChecks then refreshOwned() end end end)
   local confirm=CreateFrame("Frame","MarketeerForeverCancelConfirmation",UIParent,"BackdropTemplate")
   confirm:SetSize(320,105);confirm:SetPoint("CENTER");confirm:SetFrameStrata("FULLSCREEN_DIALOG");confirm:SetClampedToScreen(true)
   confirm:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});confirm:SetBackdropColor(.055,.065,.07,.98);confirm:SetBackdropBorderColor(.3,.5,.38,1)
@@ -418,7 +424,7 @@ function core.OnScanStarted() state.autoScanPending=false;state.autoRetryAfter=n
 function core.OnOpen()
   approvedBatch=false
   confirmedCancelled={}
-  owned={};competitions={};state.ownedComplete=false;state.needOwned=true;state.ownedRequested=nil;state.needChecks=true
+  owned={};competitions={};state.ownedComplete=false;state.needOwned=true;state.ownedRequested=nil;state.needChecks=true;state.visitedOwned=false
   state.cancelPending=nil;state.cancelStarted=nil
   state.alerted=false;state.autoScanPending=core.AutoScanDue();state.opened=(GetServerTime and GetServerTime()) or time();state.scanPendingSince=state.opened;state.autoRetryAfter=nil
   core.SetWorking("pending",state.autoScanPending)

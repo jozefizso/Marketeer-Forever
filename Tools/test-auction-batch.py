@@ -29,6 +29,7 @@ lua.execute('''
 local owned={{auctionID=10,itemKey={itemID=1}},{auctionID=11,itemKey={itemID=2}}}
 local confirmedCancelled={[10]=true};local approvedBatch=true;local scrollOffset=0
 local selectedAuctions={[11]=true};local state={ownedComplete=true,needOwned=true};local startChecks
+local checksAllowed=function()return true end
 local core={active=true};local full=false
 local render=function()end
 C_AuctionHouse={GetNumOwnedAuctions=function()return 1 end,GetOwnedAuctionInfo=function()return {auctionID=10,itemKey={itemID=1}} end,HasFullOwnedAuctionResults=function()return full end}
@@ -37,3 +38,18 @@ refreshOwned(false);assert(#owned==2 and state.ownedComplete and selectedAuction
 full=true;refreshOwned(false);assert(#owned==0 and state.ownedComplete)
 ''')
 print('Partial refresh keeps the confirmed batch snapshot; cancelled IDs stay excluded.')
+lua.execute('''
+local owned={};local confirmedCancelled={};local approvedBatch=false;local scrollOffset=0
+local selectedAuctions={};local state={ownedComplete=false,needOwned=true,needChecks=true,visitedOwned=false}
+local core={active=true};local checks=0;local startChecks=function()checks=checks+1 end
+local MarketeerForeverCoreDB={deferListingChecks=true}
+local function checksAllowed()return not MarketeerForeverCoreDB.deferListingChecks or state.visitedOwned end
+local render=function()end
+C_AuctionHouse={GetNumOwnedAuctions=function()return 1 end,GetOwnedAuctionInfo=function()return {auctionID=11,itemKey={itemID=2}} end,HasFullOwnedAuctionResults=function()return true end}
+'''+source[start:end]+'''
+refreshOwned(false);assert(checks==0 and state.needChecks and state.ownedComplete)
+state.visitedOwned=true;refreshOwned(false);assert(checks==1 and not state.needChecks)
+state.visitedOwned=false;state.needChecks=true;MarketeerForeverCoreDB.deferListingChecks=false
+core.OwnedChecksSettingChanged();assert(checks==2 and not state.needChecks)
+''')
+print('Listing checks wait for Your Auctions and resume when the setting is disabled.')

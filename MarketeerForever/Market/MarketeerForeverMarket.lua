@@ -6,7 +6,7 @@ local SAMPLE_INTERVAL = 300
 local MAX_SAMPLES = 500
 local db, market
 
-local function say(message) print("|cff33ccffMarket Vision:|r " .. message) end
+local function say(message) print("|cff33ccffVendor Flips:|r " .. message) end
 local function now() return (GetServerTime and GetServerTime()) or time() end
 local function marketKey()
   local realm = (GetRealmName and GetRealmName()) or "Unknown realm"
