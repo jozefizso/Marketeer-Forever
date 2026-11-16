@@ -79,6 +79,9 @@ local function widget(parent)
   line(0,0,108,"Craft / unit");line(118,0,110,"Vendor / unit")
   local craft=line(0,-15,108);local vendor=line(118,-15,110)
   box.craft=craft;box.vendor=vendor
+  local history=CreateFrame('Button',nil,parent,'UIPanelButtonTemplate');history:SetSize(110,23);history:SetPoint('LEFT',box,'RIGHT',8,0);history:SetFrameLevel(box:GetFrameLevel()+1);history:SetText('Market history');history:Hide()
+  history:SetScript('OnClick',function()if box.itemID and core.ShowMarketHistory then core.ShowMarketHistory(box.itemID) end end)
+  box.history=history
   box:SetScript("OnEnter",function(self)
     if not GameTooltip or not self.estimate then return end
     local e=self.estimate;GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText("Estimated acquisition cost")
@@ -97,7 +100,7 @@ local generation=0
 local function showCost(_,result)
   generation=generation+1;local current=generation
   local key=result and result.itemKey;local id=key and key.itemID
-  for _,box in pairs(widgets) do box:Hide() end
+  for _,box in pairs(widgets) do box:Hide();box.history:Hide();box.itemID=nil end
   if type(id)~="number" then return end
   local function update()
     if current~=generation or not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then return end
@@ -105,10 +108,10 @@ local function showCost(_,result)
     for _,name in ipairs({"ItemBuyFrame","CommoditiesBuyFrame"}) do
       local parent=AuctionHouseFrame[name]
       if parent then
-        local box=widget(parent);box.estimate=estimate
+        local box=widget(parent);box.estimate=estimate;box.itemID=id
         box.craft:SetText(estimate.craft and ("~"..money(estimate.craft.unit)) or "--")
         box.vendor:SetText(estimate.vendor and ("~"..money(estimate.vendor[4]/estimate.vendor[5])) or "--")
-        box:Show()
+        box:Show();box.history:Show()
       end
     end
   end

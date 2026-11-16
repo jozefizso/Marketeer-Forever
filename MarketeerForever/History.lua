@@ -57,7 +57,7 @@ function core.CreateHistoryPanel(parent)
   local range='all';local itemId;local lines={};local dots={};local displayed={};local graphStart,graphEnd
   local results,resultsPage,selectedResult={},1,1
   local searchIndex,indexData,indexCatalog,indexMarket
-  local suppressSearch=false;local searchSerial=0;local renderedQuery
+  local suppressSearch=false;local searchSerial=0;local renderedQuery;local searchJob;local pendingChoose=false
   local resultPanel=CreateFrame('Frame',nil,p,'BackdropTemplate');resultPanel:SetPoint('TOPLEFT',input,'BOTTOMLEFT',-4,-3);resultPanel:SetSize(374,147);resultPanel:SetFrameLevel(p:GetFrameLevel()+20);resultPanel:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});resultPanel:SetBackdropColor(.025,.045,.038,1);resultPanel:SetBackdropBorderColor(.22,.58,.36,1);resultPanel:Hide()
   local resultRows={};local resultPageLabel=label(resultPanel,'GameFontHighlightSmall',90,-125,275)
   local draw,selectRange
@@ -68,17 +68,26 @@ function core.CreateHistoryPanel(parent)
   end
   local function choose(v)
     if not v then return end
-    searchSerial=searchSerial+1;itemId=v.id;suppressSearch=true;input:SetText(v.name or tostring(v.id));suppressSearch=false;input:ClearFocus();resultPanel:Hide();selectRange('all')
+    searchSerial=searchSerial+1;searchJob=nil;pendingChoose=false;itemId=v.id;suppressSearch=true;input:SetText(v.name or tostring(v.id));suppressSearch=false;input:ClearFocus();resultPanel:Hide();selectRange('all')
   end
   for i=1,5 do local b=button(resultPanel,'',4,-4-(i-1)*23,366,function(self)choose(self.item)end);b.caption:ClearAllPoints();b.caption:SetPoint('LEFT',b,'LEFT',9,0);b.caption:SetWidth(275);b.caption:SetJustifyH('LEFT');b.idText=b:CreateFontString(nil,'OVERLAY','GameFontDisableSmall');b.idText:SetPoint('RIGHT',b,'RIGHT',-8,0);resultRows[i]=b end
   button(resultPanel,'<',5,-121,35,function()resultsPage=math.max(1,resultsPage-1);selectedResult=(resultsPage-1)*5+1;renderResults()end)
   button(resultPanel,'>',43,-121,35,function()resultsPage=math.min(math.max(1,math.ceil(#results/5)),resultsPage+1);selectedResult=(resultsPage-1)*5+1;renderResults()end)
+  local recipeButton=button(p,'Recipe',428,-158,75,function()if itemId and core.ShowItemRecipes then core.ShowItemRecipes(itemId) end end)
+  local lootButton=button(p,'Monster loot',508,-158,96,function()if itemId and core.ShowItemDrops then core.ShowItemDrops(itemId) end end)
+  recipeButton:Hide();lootButton:Hide()
+  local function updateItemLinks()
+    local lookup=_G.MarketeerForeverFarmLookup
+    local entry=itemId and type(lookup)=='table' and type(lookup.items)=='table' and lookup.items[itemId]
+    recipeButton:SetShown(itemId and core.HasItemRecipe and core.HasItemRecipe(itemId) or false)
+    lootButton:SetShown(entry and type(entry.drops)=='table' and #entry.drops>0 or false)
+  end
   local function clearGraph()
     for _,line in pairs(lines) do line:Hide() end;for _,dot in ipairs(dots) do dot:Hide() end
     displayed={};ytop:SetText('');ymid:SetText('');ybottom:SetText('');xleft:SetText('');xright:SetText('')
   end
   draw=function()
-    clearGraph();if not itemId then return end
+    clearGraph();updateItemLinks();if not itemId then return end
     local points,d=dataFor(itemId)
     if not d then name:SetText('Item #'..itemId);meta:SetText('');status:SetText('Market history unavailable. Run the data updater and enable Marketeer Data.');return end
     local itemName=itemNameFor(itemId);name:SetText(itemName and (itemName..'  |cff9aa9a4#'..itemId..'|r') or ('Item #'..itemId))
@@ -109,39 +118,81 @@ function core.CreateHistoryPanel(parent)
     note:SetText(d.schemaVersion==1 and 'Hourly lows; older data uses daily medians. Update for full history.' or 'Hourly lowest buyouts. Gaps indicate missing data. Prices from AHledger (ahledger.com).')
     status:SetText(#displayed==1 and 'One observation available.' or '')
   end
+  -- Spread catalog lookups, sorting, and matching across UI frames.
   local function buildIndex()
     local d,c,market=_G.MarketeerForeverHistory,_G.MarketeerForeverItemNames,core.Market()
     if searchIndex and indexData==d and indexCatalog==c and indexMarket==market then return searchIndex end
-    searchIndex={};indexData,indexCatalog,indexMarket=d,c,market
+    local index={};local work=0;local batch=250
+    local function step() work=work+1;if work>=batch then work=0;coroutine.yield() end end
     if type(d)=='table' and d.market==market and type(d.items)=='table' then
-      for candidate in pairs(d.items) do local itemName=itemNameFor(candidate);if itemName then searchIndex[#searchIndex+1]={id=candidate,name=itemName,lower=itemName:lower()} end end
+      for candidate in pairs(d.items) do
+        local itemName=itemNameFor(candidate);if itemName then index[#index+1]={id=candidate,name=itemName,lower=itemName:lower()} end
+        step()
+      end
     end
-    table.sort(searchIndex,function(a,b)if a.lower==b.lower then return a.id<b.id end;return a.lower<b.lower end)
-    return searchIndex
+    local width=1;batch=2000;work=0
+    while width<#index do
+      local merged={}
+      for first=1,#index,width*2 do
+        local middle=math.min(first+width,#index+1);local last=math.min(first+width*2-1,#index)
+        local a,b=first,middle
+        while a<middle or b<=last do
+          local left,right=index[a],index[b]
+          if a<middle and (b>last or left.lower<right.lower or (left.lower==right.lower and left.id<right.id)) then
+            merged[#merged+1]=left;a=a+1
+          else merged[#merged+1]=right;b=b+1 end
+          step()
+        end
+      end
+      index=merged;width=width*2
+    end
+    searchIndex=index;indexData,indexCatalog,indexMarket=d,c,market
+    return index
   end
   local function updateResults()
     local raw=input:GetText() or '';local query=raw:match('^%s*(.-)%s*$'):lower();renderedQuery=raw
+    searchJob=nil
     if #query<2 or query:match('^%d+$') or query:find('item:',1,true) then resultPanel:Hide();return end
-    local prefix,other={},{}
-    for _,v in ipairs(buildIndex()) do local at=v.lower:find(query,1,true);if at==1 then prefix[#prefix+1]=v elseif at then other[#other+1]=v end end
-    results=prefix;for _,v in ipairs(other) do results[#results+1]=v end
-    resultsPage=1;selectedResult=1;renderResults();resultPanel:Show()
+    results={};resultsPage=1;selectedResult=1;renderResults();resultPageLabel:SetText('Searching...');resultPanel:Show()
+    local serial=searchSerial
+    searchJob=coroutine.create(function()
+      local prefix,other={},{}
+      for i,v in ipairs(buildIndex()) do
+        local at=v.lower:find(query,1,true);if at==1 then prefix[#prefix+1]=v elseif at then other[#other+1]=v end
+        if i%250==0 then coroutine.yield() end
+      end
+      for i,v in ipairs(other) do prefix[#prefix+1]=v;if i%250==0 then coroutine.yield() end end
+      if serial~=searchSerial then return end
+      results=prefix;renderResults()
+      if pendingChoose then
+        pendingChoose=false
+        if results[1] then choose(results[1]) else status:SetText('No matching item. Try another name, item ID, or item link.') end
+      end
+    end)
   end
   local function search()
     local raw=input:GetText() or '';local id=tonumber(raw:match('item:(%d+)') or raw:match('^%s*(%d+)%s*$'))
-    if id and id>0 then choose({id=id,name=itemNameFor(id)})
+    if id and id>0 then pendingChoose=false;searchJob=nil;choose({id=id,name=itemNameFor(id)})
     else
-      if not resultPanel:IsShown() or renderedQuery~=raw then updateResults() end
-      if results[1] and resultPanel:IsShown() then choose(results[selectedResult] or results[1]) else status:SetText('No matching item. Try another name, item ID, or item link.') end
+      if not resultPanel:IsShown() or renderedQuery~=raw then searchSerial=searchSerial+1;updateResults() end
+      if searchJob then pendingChoose=true
+      elseif results[1] and resultPanel:IsShown() then choose(results[selectedResult] or results[1])
+      else status:SetText('No matching item. Try another name, item ID, or item link.') end
     end
   end
+  p:SetScript('OnUpdate',function()
+    if not searchJob then return end
+    local job=searchJob;local ok,err=coroutine.resume(job)
+    if not ok then searchJob=nil;pendingChoose=false;resultPageLabel:SetText('Search failed');if geterrorhandler then geterrorhandler()(err) end
+    elseif coroutine.status(job)=='dead' and searchJob==job then searchJob=nil end
+  end)
   input:SetScript('OnTextChanged',function(_,userInput)
     if suppressSearch or not userInput then return end
-    searchSerial=searchSerial+1;local serial=searchSerial
+    searchSerial=searchSerial+1;searchJob=nil;pendingChoose=false;resultPanel:Hide();local serial=searchSerial
     if C_Timer and C_Timer.After then C_Timer.After(.15,function()if serial==searchSerial and p:IsShown() then updateResults() end end) else updateResults() end
   end)
   input:SetScript('OnEnterPressed',search)
-  input:SetScript('OnEscapePressed',function(s)searchSerial=searchSerial+1;resultPanel:Hide();s:ClearFocus()end)
+  input:SetScript('OnEscapePressed',function(s)searchSerial=searchSerial+1;searchJob=nil;pendingChoose=false;resultPanel:Hide();s:ClearFocus()end)
   input:SetScript('OnArrowPressed',function(_,key)
     if not resultPanel:IsShown() or #results==0 then return end
     if key=='DOWN' then selectedResult=math.min(#results,selectedResult+1) elseif key=='UP' then selectedResult=math.max(1,selectedResult-1) else return end
@@ -159,7 +210,7 @@ function core.CreateHistoryPanel(parent)
   end
   chart:SetScript('OnEnter',function(self)self.hovered=true;hover()end);chart:SetScript('OnLeave',function(self)self.hovered=false;if GameTooltip then GameTooltip:Hide() end end)
   chart:SetScript('OnUpdate',function(self,delta)if self.hovered then self.elapsed=(self.elapsed or 0)+delta;if self.elapsed>=.1 then self.elapsed=0;hover() end end end)
-  function p:SetItem(id) itemId=tonumber(id);if itemId then searchSerial=searchSerial+1;resultPanel:Hide();suppressSearch=true;input:SetText(itemNameFor(itemId) or tostring(itemId));suppressSearch=false;selectRange('all') end end
+  function p:SetItem(id) itemId=tonumber(id);if itemId then searchSerial=searchSerial+1;searchJob=nil;pendingChoose=false;resultPanel:Hide();suppressSearch=true;input:SetText(itemNameFor(itemId) or tostring(itemId));suppressSearch=false;selectRange('all') end end
   function p:Refresh() if itemId then draw() end end
   chart:SetScript('OnSizeChanged',function() if itemId then draw() end end)
   p:RegisterEvent('GET_ITEM_INFO_RECEIVED');p:SetScript('OnEvent',function(_,_,id,success)if success and id==itemId and p:IsShown() then draw() end end)

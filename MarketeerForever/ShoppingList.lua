@@ -3,6 +3,7 @@ local core=MarketeerForeverCore
 local recipes,vendors={},{}
 local frame,content,scroll
 local render,rendering
+local importDialog
 local opening,pendingQuantity
 local requestedNames={}
 local function bagCounts()
@@ -104,8 +105,31 @@ local function create()
   scroll=CreateFrame('ScrollFrame',nil,frame,'UIPanelScrollFrameTemplate');scroll:SetPoint('TOPLEFT',12,-42);scroll:SetPoint('BOTTOMRIGHT',-30,42)
   content=CreateFrame('Frame',nil,scroll);content:SetSize(360,1);scroll:SetScrollChild(content)
   local clear=button(frame,'Clear list',85,function()recipes={};vendors={};render()end);clear:SetPoint('BOTTOMLEFT',12,10)
+  local import=button(frame,'Import',85,function()importDialog:Show() end);import:SetPoint('BOTTOMLEFT',105,10)
+  import:SetScript('OnEnter',function(self)
+    if GameTooltip then GameTooltip:SetOwner(self,'ANCHOR_TOP');GameTooltip:SetText('Import shopping list');GameTooltip:AddLine('Paste a Wowhead or Auctionator shopping-list export to add its items and quantities.',1,1,1,true);GameTooltip:Show() end
+  end)
+  import:SetScript('OnLeave',function()if GameTooltip then GameTooltip:Hide() end end)
   local resize=button(frame,'Resize',64,function()end);resize:SetPoint('BOTTOMRIGHT',-8,8)
   resize:SetScript('OnMouseDown',function(_,which)if which=='LeftButton' then frame:StartSizing('BOTTOMRIGHT') end end);resize:SetScript('OnMouseUp',function()frame:StopMovingOrSizing()end);resize:SetScript('OnHide',function()frame:StopMovingOrSizing()end)
+  importDialog=CreateFrame('Frame',nil,frame,'BackdropTemplate');importDialog:SetSize(340,250);importDialog:SetPoint('CENTER');importDialog:SetFrameLevel(frame:GetFrameLevel()+20);importDialog:EnableMouse(true)
+  importDialog:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});importDialog:SetBackdropColor(.055,.075,.065,1);importDialog:SetBackdropBorderColor(.25,.48,.34,1)
+  label(importDialog,12,-12,310,'GameFontNormal'):SetText('IMPORT SHOPPING LIST')
+  label(importDialog,12,-34,310):SetText('Paste a Wowhead / Auctionator export below.')
+  local pasteBox=CreateFrame('Frame',nil,importDialog,'BackdropTemplate');pasteBox:SetPoint('TOPLEFT',10,-53);pasteBox:SetPoint('BOTTOMRIGHT',-29,61)
+  pasteBox:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});pasteBox:SetBackdropColor(.16,.18,.17,1);pasteBox:SetBackdropBorderColor(.45,.50,.47,1);pasteBox:EnableMouse(true)
+  local pasteScroll=CreateFrame('ScrollFrame',nil,importDialog,'UIPanelScrollFrameTemplate');pasteScroll:SetPoint('TOPLEFT',15,-58);pasteScroll:SetPoint('BOTTOMRIGHT',-34,65)
+  local paste=CreateFrame('EditBox',nil,pasteScroll);paste:SetMultiLine(true);paste:SetAutoFocus(false);paste:SetFontObject('ChatFontNormal');paste:SetWidth(285);paste:SetHeight(130);paste:SetMaxLetters(0);pasteScroll:SetScrollChild(paste)
+  pasteBox:SetScript('OnMouseDown',function()paste:SetFocus()end)
+  importDialog:SetScript('OnShow',function()paste:SetFocus()end)
+  paste:SetScript('OnEscapePressed',function()importDialog:Hide()end)
+  local message=label(importDialog,12,-192,315);message:SetText('')
+  local accept=button(importDialog,'Import',85,function()
+    local ok,description=core.ImportShoppingList(paste:GetText())
+    if ok then paste:SetText('');importDialog:Hide();print('Marketeer: '..description) else message:SetText(description) end
+  end);accept:SetPoint('BOTTOMLEFT',12,10)
+  local cancel=button(importDialog,'Cancel',85,function()importDialog:Hide()end);cancel:SetPoint('BOTTOMRIGHT',-12,10)
+  importDialog:Hide()
   frame:SetScript('OnSizeChanged',function()if render then render() end end)
   frame:Hide()
 end
@@ -132,16 +156,29 @@ render=function()
     edit:SetScript('OnEnterPressed',function(s)s:ClearFocus();render()end)
     edit:SetScript('OnEscapePressed',function(s)recipe.count=s.startCount or recipe.count;s:ClearFocus();render()end)
     local minus=button(row,'-',24,function()recipe.count=math.max(1,recipe.count-1);render()end);minus:SetPoint('RIGHT',edit,'LEFT',-4,0)
-    for _,m in ipairs(recipe.materials) do local a=materials[m.id] or {id=m.id,name=m.name,quantity=0};a.quantity=a.quantity+m.quantity*recipe.count;materials[m.id]=a end
+    for _,m in ipairs(recipe.materials) do local key=m.id or ('name:'..m.name:lower());local a=materials[key] or {id=m.id,name=m.name,quantity=0};a.quantity=a.quantity+m.quantity*recipe.count;if recipe.imported then a.imported=true end;materials[key]=a end
     y=y+27
   end
   local all={};for _,m in pairs(materials) do all[#all+1]=m end;table.sort(all,function(a,b)return a.name:lower()<b.name:lower()end)
-  if #all>0 then local r=line('heading',y,width);label(r,2,-4,width-195,'GameFontNormalSmall'):SetText('MATERIALS NEEDED');local h=label(r,width-190,-4,130,'GameFontNormalSmall');h:SetJustifyH('RIGHT');h:SetText('IN BAGS / NEED');y=y+24 end
+  if #all>0 then local r=line('heading',y,width);label(r,2,-4,width-195,'GameFontNormalSmall'):SetText('MATERIALS NEEDED');local h=label(r,width-195,-4,105,'GameFontNormalSmall');h:SetJustifyH('RIGHT');h:SetText('IN BAGS / NEED');y=y+24 end
   for _,m in ipairs(all) do
-    local r=line('material',y,width);label(r,8,-4,width-205):SetText(itemName(m.id,m.name))
-    local have=carried and (carried[m.id] or 0);local progress=label(r,width-190,-4,130);progress:SetJustifyH('RIGHT')
+    local r=line('material',y,width);label(r,8,-4,width-205):SetText(m.id and itemName(m.id,m.name) or (m.name..' (unresolved)'))
+    local have=m.id and carried and (carried[m.id] or 0);local progress=label(r,width-195,-4,105);progress:SetJustifyH('RIGHT')
     if have and have>=m.quantity then progress:SetText('|cff73e6a3[OK] '..have..' / '..m.quantity..'|r') else progress:SetText((have and tostring(have) or '--')..' / '..m.quantity) end
-    if auctionOpen() then local buy=button(r,'Open',50,function()local counts=bagCounts();if not counts then print('Marketeer: bag quantities are unavailable; try again.');return end;local missing=math.max(0,m.quantity-(counts[m.id] or 0));if missing>0 then openMaterial(m.id,missing) else print('Marketeer: you already have the required amount in your bags.') end end);buy:SetPoint('TOPRIGHT',0,0);buy:SetEnabled(have~=nil and have<m.quantity) end
+    if m.id and auctionOpen() then local buy=button(r,'Open',50,function()local counts=bagCounts();if not counts then print('Marketeer: bag quantities are unavailable; try again.');return end;local missing=math.max(0,m.quantity-(counts[m.id] or 0));if missing>0 then openMaterial(m.id,missing) else print('Marketeer: you already have the required amount in your bags.') end end);buy:SetPoint('TOPRIGHT',-28,0);buy:SetEnabled(have~=nil and have<m.quantity) end
+    if m.imported then
+      local remove=button(r,'X',24,function()
+        local key=m.id or ('name:'..m.name:lower())
+        for i=#recipes,1,-1 do
+          local recipe=recipes[i]
+          if recipe.imported then
+            for j=#recipe.materials,1,-1 do local item=recipe.materials[j];if (item.id or ('name:'..item.name:lower()))==key then table.remove(recipe.materials,j) end end
+            if #recipe.materials==0 then table.remove(recipes,i) end
+          end
+        end
+        render()
+      end);remove:SetPoint('TOPRIGHT',0,0)
+    end
     y=y+22
   end
   if #vendors>0 then local r=line('heading',y,width);label(r,2,-4,width,'GameFontNormalSmall'):SetText('VENDOR ITEMS');y=y+24 end
@@ -172,6 +209,40 @@ itemEvents:SetScript('OnUpdate',function(_,delta)
   if request.elapsed>15 then pendingQuantity=nil;print('Marketeer: quantity could not be filled; enter '..request.quantity..' manually.');return end
   if request.delay==0 then applyQuantity() end
 end)
+-- Wowhead exports a list title followed by caret-separated Auctionator searches.
+function core.ImportShoppingList(text)
+  if type(text)~='string' or #text>100000 then return false,'Paste a valid export (up to 100 KB).' end
+  local parts={};for part in (text..'^'):gmatch('(.-)%^') do parts[#parts+1]=part end
+  local title=parts[1] and parts[1]:match('^%s*(.-)%s*$')
+  if not title or title=='' or #parts<2 or #parts>501 then return false,'Could not read the list title and items.' end
+  local items,wanted={},{}
+  for i=2,#parts do
+    local fields={};for field in (parts[i]..';'):gmatch('(.-);') do fields[#fields+1]=field end
+    local name=fields[1] and fields[1]:match('^%s*"(.-)"%s*$')
+    local quantity=fields[14] and tonumber(fields[14])
+    if not name or name=='' or #fields~=14 or not quantity or quantity<1 or quantity>1000000 or quantity~=math.floor(quantity) then return false,'Invalid item or quantity at entry '..(i-1)..'.' end
+    for j=2,13 do if fields[j]~='' then return false,'Unsupported search filter at entry '..(i-1)..'.' end end
+    items[#items+1]={name=name,quantity=quantity};wanted[name:lower()]=true
+  end
+  local ids={}
+  local function remember(id,name)
+    if type(id)~='number' or type(name)~='string' then return end
+    local key=name:lower();if not wanted[key] then return end
+    if ids[key]==nil then ids[key]=id elseif ids[key]~=id then ids[key]=false end
+  end
+  local catalog=_G.MarketeerForeverItemNames
+  if type(catalog)=='table' and type(catalog.items)=='table' then for id,name in pairs(catalog.items) do remember(id,name) end end
+  local lookup=_G.MarketeerForeverFarmLookup
+  if type(lookup)=='table' and type(lookup.items)=='table' then for id,item in pairs(lookup.items) do if type(item)=='table' then remember(id,item.name) end end end
+  local unresolved=0
+  for _,item in ipairs(items) do item.id=ids[item.name:lower()] or nil;if not item.id then unresolved=unresolved+1 end end
+  recipes[#recipes+1]={name=title,count=1,materials=items,imported=true}
+  create();render();frame:Show()
+  return true,'Imported '..#items..' items'..(unresolved>0 and ('; '..unresolved..' could not be matched to an item ID.') or '.')
+end
+function core.OpenShoppingList() create();render();frame:Show() end
+SLASH_MARKETEERSHOPPING1='/marketeershopping'
+SlashCmdList.MARKETEERSHOPPING=core.OpenShoppingList
 function core.AddShoppingRecipe(recipe)
   if type(recipe)~='table' or type(recipe.materials)~='table' then return end
   local key=recipe.id or recipe.output or recipe.name;local found
