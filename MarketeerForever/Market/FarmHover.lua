@@ -27,7 +27,7 @@ local function modifier()
 end
 local function modifierDown()
   local key=modifier()
-  if MarketeerForeverCoreDB and MarketeerForeverCoreDB.farmHoverNoCombat and InCombatLockdown and InCombatLockdown() then return false end
+  if (not MarketeerForeverCoreDB or MarketeerForeverCoreDB.farmHoverNoCombat~=false) and InCombatLockdown and InCombatLockdown() then return false end
   if key=='CTRL' then return IsControlKeyDown and IsControlKeyDown() end
   if key=='ALT' then return IsAltKeyDown and IsAltKeyDown() end
   return key=='SHIFT' and IsShiftKeyDown and IsShiftKeyDown()

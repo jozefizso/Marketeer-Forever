@@ -306,18 +306,19 @@ local function buildWindow()
   if window then return end
   window=CreateFrame("Frame","MarketeerForeverBagRulesWindow",UIParent,"BackdropTemplate")
   core.RegisterEscapeFrame("MarketeerForeverBagRulesWindow")
-  window:SetSize(610,420);window:SetPoint("CENTER");window:SetFrameStrata("DIALOG");window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
+  window:SetSize(610,470);window:SetPoint("CENTER");window:SetFrameStrata("FULLSCREEN_DIALOG");window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
   window:SetScript("OnDragStart",function(self) self:StartMoving() end);window:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
   window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,.98);window:SetBackdropBorderColor(.35,.42,.37,1)
   local title=window:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",16,-16);title:SetText("BAG SELLING RULES")
-  local note=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",16,-43);note:SetPoint("TOPRIGHT",-16,-43);note:SetJustifyH("LEFT");note:SetText("AH premium is the AH price minus vendor value, divided by the AH price. The highest matching rule wins. When vendor pays more, the lowest Vendor rule applies.")
-  local tradingOnly=CreateFrame("CheckButton",nil,window,"UICheckButtonTemplate");tradingOnly:SetSize(24,24);tradingOnly:SetPoint("TOPLEFT",16,-77)
+  local note=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",16,-43);note:SetPoint("TOPRIGHT",-16,-43);note:SetJustifyH("LEFT");note:SetText("Each rule compares the auction house (AH) price with the vendor sell price. AH premium = (AH price - vendor price) / AH price. The highest matching threshold wins; when a vendor pays more, the lowest Vendor rule applies.\n\nFor bag value, choose AH if you plan to auction matching items, or Vendor if you plan to sell them to an NPC. This choice only changes the estimate; it does not sell items.")
+  local tradingOnly=CreateFrame("CheckButton",nil,window,"UICheckButtonTemplate");tradingOnly:SetSize(24,24);tradingOnly:SetPoint("TOPLEFT",16,-119)
   local tradingLabel=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");tradingLabel:SetPoint("LEFT",tradingOnly,"RIGHT",2,0);tradingLabel:SetText("Only show dots at the auction house or vendor (hold Shift to show)")
   tradingOnly:SetScript("OnClick",function(self) MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.bagMarkersTradingOnly=self:GetChecked() and true or false;schedule() end)
+  local methodHeading=window:CreateFontString(nil,"OVERLAY","GameFontNormalSmall");methodHeading:SetPoint("TOPLEFT",270,-145);methodHeading:SetText("BAG VALUE USES")
   for i=1,6 do
     local row={};rows[i]=row
-    local y=-110-(i-1)*39
-    local label=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");label:SetPoint("TOPLEFT",20,y-5);label:SetText("AH premium over vendor >")
+    local y=-160-(i-1)*39
+    local label=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");label:SetPoint("TOPLEFT",20,y-5);label:SetText("AH premium >")
     row.threshold=CreateFrame("EditBox",nil,window,"InputBoxTemplate");row.threshold:SetSize(55,24);row.threshold:SetPoint("TOPLEFT",170,y);row.threshold:SetAutoFocus(false);row.threshold:SetMaxLetters(8)
     local suffix=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");suffix:SetPoint("TOPLEFT",230,y-5);suffix:SetText("% of AH")
     row.method=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");row.method:SetSize(90,24);row.method:SetPoint("TOPLEFT",270,y)
