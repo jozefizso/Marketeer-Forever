@@ -8,7 +8,8 @@ lua=LuaRuntime(unpack_returned_tuples=True)
 lua.execute('''
 MarketeerForeverCore={}
 MarketeerForeverFarmData={mobs={[2559]={name='Highland Strider'}}}
-local canvas={GetWidth=function()return 1000 end,GetHeight=function()return 800 end}
+canvasScale=1;local canvas={GetWidth=function()return 1000 end,GetHeight=function()return 800 end,GetEffectiveScale=function()return canvasScale end}
+UIParent={GetEffectiveScale=function()return 1 end}
 WorldMapFrame={shown=false,GetCanvas=function()return canvas end,GetMapID=function()return 1417 end,
  IsShown=function(self)return self.shown end,HookScript=function(self,_,fn)self.onHide=fn end,
  Hide=function(self)self.shown=false;if self.onHide then self.onHide(self) end end}
@@ -17,7 +18,7 @@ reopened=0
 MarketeerForeverCore.OpenTradingMenu=function()reopened=reopened+1;MarketeerForeverMenu.shown=true end
 pins={}
 function CreateFrame()
- local p={shown=false,scripts={}};function p:SetSize()end;function p:EnableMouse()end;function p:SetFrameLevel()end;function p:SetScript(k,v)self.scripts[k]=v end
+ local p={shown=false,scripts={}};function p:SetSize()end;function p:SetScale(v)self.scale=v end;function p:EnableMouse()end;function p:SetFrameLevel()end;function p:SetScript(k,v)self.scripts[k]=v end
  function p:ClearAllPoints()end;function p:SetPoint(...)self.pos={...}end;function p:Show()self.shown=true end;function p:Hide()self.shown=false end
  function p:CreateTexture()local t={SetAllPoints=function()end,SetTexture=function(self,v)self.texture=v end,SetBlendMode=function(self,v)self.blend=v end,SetVertexColor=function()end,SetAtlas=function(self,v)self.atlas=v end};self.icon=t;return t end
  pins[#pins+1]=p;return p
@@ -51,6 +52,7 @@ assert(c.FarmMapOpen(-1,dungeon[1]));WorldMapFrame:Hide();assert(reopened==1 and
 assert(c.FarmMapOpen(2559,zones[1]) and opened==1417 and #pins>0 and pins[1].shown)
 assert(math.abs(focused[1]-.4)<.00001 and math.abs(focused[2]-.6)<.00001)
 assert(pins[1].icon.atlas=='Waypoint-MapPin-Untracked')
+assert(pins[1].scale==1);canvasScale=4;callbacks.OpenMap_ViewChanged();assert(pins[1].scale==.25);canvasScale=.5;callbacks.OpenMap_ViewChanged();assert(pins[1].scale==2)
 pins[1].scripts.OnEnter(pins[1]);assert(tooltipText:find('Highland Strider',1,true) and tooltipText:find('Classic spawn reference',1,true));pins[1].scripts.OnLeave(pins[1]);assert(not GameTooltip.owner)
 assert(c.FarmMapOpen(-1,zones[1]) and opened==1417 and not pins[1].shown)
 assert(c.FarmMapOpen(2559,zones[1]) and pins[1].shown)

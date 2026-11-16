@@ -41,6 +41,10 @@ local function refreshMarkers()
   if not selected or not api or not api.IsStitched() or not map or not map.GetCanvas then return 0 end
   local canvas=map:GetCanvas();local host=map:GetMapID()
   if not canvas or not host then return 0 end
+  -- Canvas children otherwise grow with OpenMap's stitched-map zoom.
+  local canvasScale=canvas.GetEffectiveScale and canvas:GetEffectiveScale()
+  local uiScale=UIParent and UIParent.GetEffectiveScale and UIParent:GetEffectiveScale()
+  local pinScale=canvasScale and canvasScale>0 and uiScale and uiScale>0 and uiScale/canvasScale or 1
   local count=0
   local minU,maxU,minV,maxV
   for _,point in ipairs(selected.points) do
@@ -70,7 +74,7 @@ local function refreshMarkers()
           if not ok then icon:SetTexture('Interface\\TargetingFrame\\UI-RaidTargetingIcon_8') end
           markers[count]=pin
         end
-        pin.creatureName=selected.name;pin:SetFrameLevel((api.ArtTopLevel() or 0)+1);pin:ClearAllPoints();pin:SetPoint('CENTER',canvas,'TOPLEFT',canvas:GetWidth()*x,-canvas:GetHeight()*y);pin:Show()
+        pin.creatureName=selected.name;pin:SetScale(pinScale);pin:SetFrameLevel((api.ArtTopLevel() or 0)+1);pin:ClearAllPoints();pin:SetPoint('CENTER',canvas,'TOPLEFT',canvas:GetWidth()*x,-canvas:GetHeight()*y);pin:Show()
       end
     end
   end

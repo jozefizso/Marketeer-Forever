@@ -20,15 +20,27 @@ for _,col in ipairs(columns) do text(col.x,-143,col.width,'GameFontNormalSmall')
 local lines={};for i=1,3 do local row={};for _,col in ipairs(columns) do row[col.key]=text(col.x,-160-(i-1)*17,col.width) end;lines[i]=row end
 local note=text(14,-218,315);note:SetText('|cff91a99a1 per drop; assumes sales. No deposit costs.|r')
 local shownID,shownLevel,dismissedID,dragging,userPositioned
+local function modifier()
+  local key=MarketeerForeverCoreDB and MarketeerForeverCoreDB.farmHoverKey
+  if key=='CTRL' or key=='ALT' or key=='OFF' then return key end
+  return 'SHIFT'
+end
+local function modifierDown()
+  local key=modifier()
+  if MarketeerForeverCoreDB and MarketeerForeverCoreDB.farmHoverNoCombat and InCombatLockdown and InCombatLockdown() then return false end
+  if key=='CTRL' then return IsControlKeyDown and IsControlKeyDown() end
+  if key=='ALT' then return IsAltKeyDown and IsAltKeyDown() end
+  return key=='SHIFT' and IsShiftKeyDown and IsShiftKeyDown()
+end
 card:SetScript('OnDragStart',function(self)
-  if IsShiftKeyDown and IsShiftKeyDown() then dragging=true;self:StartMoving() end
+  if modifierDown() then dragging=true;self:StartMoving() end
 end)
 card:SetScript('OnDragStop',function(self)
   if dragging then self:StopMovingOrSizing();dragging=false;userPositioned=true end
 end)
 local open=CreateFrame('Button',nil,card,'UIPanelButtonTemplate');open:SetSize(110,23);open:SetPoint('BOTTOMLEFT',card,'BOTTOMLEFT',14,10);open:SetText('Open Farm')
 open:SetScript('OnClick',function()if shownID and core.ShowFarmMonster then local id,level=shownID,shownLevel;dismissedID=id;card:Hide();shownID=nil;shownLevel=nil;core.ShowFarmMonster(id,level) end end)
-local moveHint=text(137,-242,180);moveHint:SetText('|cff91a99aShift + drag to move|r')
+local moveHint=text(137,-242,210)
 local close=CreateFrame('Button',nil,card,'UIPanelButtonTemplate');close:SetSize(25,22);close:SetPoint('TOPRIGHT',card,'TOPRIGHT',-9,-15);close:SetText('X')
 close:SetScript('OnClick',function()dismissedID=shownID;shownID=nil;card:Hide()end)
 local function money(n)
@@ -47,7 +59,7 @@ local function mouseoverID()
 end
 local function update()
   if dragging then return end
-  if not IsShiftKeyDown or not IsShiftKeyDown() then return end
+  if not modifierDown() then return end
   local id=mouseoverID();if not id or id==dismissedID then return end
   if GameTooltip and GameTooltip.IsShown and not GameTooltip:IsShown() then return end
   local mob=MarketeerForeverFarmData and MarketeerForeverFarmData.mobs[id]
@@ -95,12 +107,12 @@ local function update()
       if x<400 then card:SetPoint('TOPLEFT',UIParent,'BOTTOMLEFT',x+width*scale+10,y) else card:SetPoint('TOPRIGHT',UIParent,'BOTTOMLEFT',x-10,y) end
     else card:SetPoint('CENTER',UIParent,'CENTER',0,0) end
   end
+  local key=modifier();moveHint:SetText('|cff91a99a'..(key=='CTRL' and 'Ctrl' or key=='ALT' and 'Alt' or 'Shift')..' + drag to move|r')
   shownID=id;card:Show()
 end
 local events=CreateFrame('Frame');events:RegisterEvent('UPDATE_MOUSEOVER_UNIT');events:RegisterEvent('MODIFIER_STATE_CHANGED');events:RegisterEvent('PLAYER_ENTERING_WORLD')
 events:SetScript('OnEvent',function(_,event,key)
-  if event=='MODIFIER_STATE_CHANGED' and key~='LSHIFT' and key~='RSHIFT' then return end
-  if event=='MODIFIER_STATE_CHANGED' and (not IsShiftKeyDown or not IsShiftKeyDown()) then
+  if event=='MODIFIER_STATE_CHANGED' and not modifierDown() then
     if dragging then card:StopMovingOrSizing();dragging=false;userPositioned=true end
     dismissedID=nil;shownID=nil;card:Hide();return
   end
@@ -109,7 +121,7 @@ end)
 local elapsed=0
 events:SetScript('OnUpdate',function(_,dt)
   elapsed=elapsed+dt;if elapsed<.2 then return end;elapsed=0
-  if not IsShiftKeyDown or not IsShiftKeyDown() then
+  if not modifierDown() then
     if dragging then card:StopMovingOrSizing();dragging=false;userPositioned=true end
     dismissedID=nil;shownID=nil;if card:IsShown() then card:Hide() end;return
   end

@@ -1,5 +1,5 @@
 local core=MarketeerForeverCore
-local frame,mini,coinCheck,bag,history,farm,lookup,recipes,auctionChat,bagTab,historyTab,farmTab,lookupTab,recipesTab,auctionChatTab
+local frame,mini,coinCheck,bag,history,farm,lookup,recipes,auctionChat,hotkeys,bagTab,historyTab,farmTab,lookupTab,recipesTab,auctionChatTab,hotkeysTab
 local lastTab='bag'
 local function text(parent,template,x,y,width)
   local f=parent:CreateFontString(nil,'OVERLAY',template);f:SetPoint('TOPLEFT',x,y);if width then f:SetWidth(width);f:SetJustifyH('LEFT') end;return f
@@ -48,22 +48,46 @@ local function build()
   text(auctionChat,'GameFontHighlight',24,-273,550):SetText('If you use Chattynator, choose which of its tabs receive auction alerts.')
   button(auctionChat,'Assign Chattynator tabs',24,-312,210,function()if core.ShowAuctionChatSettings then core.ShowAuctionChatSettings() else print('Marketeer: auction chat module did not load. Restart the game or reinstall the addon.') end end)
   text(auctionChat,'GameFontHighlightSmall',24,-354,550):SetText('Allow Marketeer under Addons in each selected Chattynator tab’s filters.')
+  hotkeys=CreateFrame('Frame',nil,content);hotkeys:SetAllPoints()
+  text(hotkeys,'GameFontNormalLarge',22,-86,550):SetText('HOTKEYS')
+  text(hotkeys,'GameFontNormal',24,-132,550):SetText('MONSTER HOVER SNAPSHOT')
+  text(hotkeys,'GameFontHighlight',24,-159,550):SetText('Hold the selected key while hovering an enemy to see its loot and market value.')
+  local current=text(hotkeys,'GameFontHighlight',24,-194,550)
+  local choices={{'Shift','SHIFT'},{'Ctrl','CTRL'},{'Alt','ALT'},{'Off','OFF'}}
+  local choicesButtons={}
+  local function refreshHotkeys()
+    local key=MarketeerForeverCoreDB.farmHoverKey or 'SHIFT'
+    local name=key=='CTRL' and 'Ctrl' or key=='ALT' and 'Alt' or key=='OFF' and 'Off' or 'Shift'
+    current:SetText('Current: '..name..(key=='OFF' and ' (snapshot disabled)' or '  |  Release the key to close the snapshot.'))
+    for _,entry in ipairs(choicesButtons) do entry.button:SetBackdropBorderColor(entry.key==key and .40 or .20,entry.key==key and .85 or .38,entry.key==key and .55 or .28,1) end
+  end
+  for i,choice in ipairs(choices) do
+    local key=choice[2]
+    local b=button(hotkeys,choice[1],24+(i-1)*100,-225,90,function()MarketeerForeverCoreDB.farmHoverKey=key;refreshHotkeys()end)
+    choicesButtons[#choicesButtons+1]={button=b,key=key}
+    b:SetScript('OnLeave',refreshHotkeys)
+  end
+  local combatCheck=CreateFrame('CheckButton',nil,hotkeys,'UICheckButtonTemplate');combatCheck:SetPoint('TOPLEFT',20,-275);combatCheck:SetSize(30,30)
+  text(hotkeys,'GameFontHighlight',54,-282,500):SetText('Disable monster snapshot during combat')
+  combatCheck:SetScript('OnClick',function(s)MarketeerForeverCoreDB.farmHoverNoCombat=s:GetChecked() and true or false end)
+  hotkeys:SetScript('OnShow',function()refreshHotkeys();combatCheck:SetChecked(MarketeerForeverCoreDB.farmHoverNoCombat==true)end)
   history=core.CreateHistoryPanel(content)
   farm=core.CreateFarmPanel(content)
   lookup=core.CreateFarmLookupPanel(content)
   recipes=core.CreateRecipeBrowser(content)
-  local function selectTab(which) lastTab=which;local h=which=='history';local f=which=='farm';local l=which=='lookup';local r=which=='recipes';local a=which=='auctionchat';bag:SetShown(not h and not f and not l and not r and not a);history:SetShown(h);farm:SetShown(f);lookup:SetShown(l);recipes:SetShown(r);auctionChat:SetShown(a);bagTab:SetAlpha(not h and not f and not l and not r and not a and 1 or .65);historyTab:SetAlpha(h and 1 or .65);farmTab:SetAlpha(f and 1 or .65);lookupTab:SetAlpha(l and 1 or .65);recipesTab:SetAlpha(r and 1 or .65);auctionChatTab:SetAlpha(a and 1 or .65);if h then history:Refresh() end end
+  local function selectTab(which) lastTab=which;local h=which=='history';local f=which=='farm';local l=which=='lookup';local r=which=='recipes';local a=which=='auctionchat';local k=which=='hotkeys';bag:SetShown(not h and not f and not l and not r and not a and not k);history:SetShown(h);farm:SetShown(f);lookup:SetShown(l);recipes:SetShown(r);auctionChat:SetShown(a);hotkeys:SetShown(k);bagTab:SetAlpha(not h and not f and not l and not r and not a and not k and 1 or .65);historyTab:SetAlpha(h and 1 or .65);farmTab:SetAlpha(f and 1 or .65);lookupTab:SetAlpha(l and 1 or .65);recipesTab:SetAlpha(r and 1 or .65);auctionChatTab:SetAlpha(a and 1 or .65);hotkeysTab:SetAlpha(k and 1 or .65);if h then history:Refresh() end end
   bagTab=button(frame,'Bag tools',10,-85,130,function()selectTab('bag')end)
   historyTab=button(frame,'Market history',10,-118,130,function()selectTab('history')end)
   farmTab=button(frame,'Farm',10,-151,130,function()selectTab('farm')end)
   lookupTab=button(frame,'Find sources',10,-184,130,function()selectTab('lookup')end)
   recipesTab=button(frame,'Recipes',10,-217,130,function()selectTab('recipes')end)
   auctionChatTab=button(frame,'Auction Chat',10,-250,130,function()selectTab('auctionchat')end)
+  hotkeysTab=button(frame,'Hotkeys',10,-283,130,function()selectTab('hotkeys')end)
   frame.selectTab=selectTab
   frame:SetScript('OnShow',function()coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true)end)
   frame:Hide()
 end
-function core.OpenTradingMenu(tab,id,level) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab((tab=='bag' or tab=='history' or tab=='farm' or tab=='lookup' or tab=='recipes' or tab=='auctionchat') and tab or lastTab);if tab=='history' and id then history:SetItem(id) elseif tab=='lookup' and id then lookup:SetItem(id) elseif tab=='farm' and id then core.SelectFarmMonster(id,level) elseif tab=='recipes' and id then recipes:SetItem(id) end end
+function core.OpenTradingMenu(tab,id,level) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab((tab=='bag' or tab=='history' or tab=='farm' or tab=='lookup' or tab=='recipes' or tab=='auctionchat' or tab=='hotkeys') and tab or lastTab);if tab=='history' and id then history:SetItem(id) elseif tab=='lookup' and id then lookup:SetItem(id) elseif tab=='farm' and id then core.SelectFarmMonster(id,level) elseif tab=='recipes' and id then recipes:SetItem(id) end end
 function core.ShowMarketHistory(id) core.OpenTradingMenu('history',id) end
 function core.ShowItemDrops(id) core.OpenTradingMenu('lookup',tonumber(id)) end
 function core.ShowFarmMonster(id,level) core.OpenTradingMenu('farm',tonumber(id),level) end
