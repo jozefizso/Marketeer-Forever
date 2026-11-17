@@ -28,8 +28,15 @@ UIParent=CreateFrame('UI');listener=nil
 ''')
 lua.execute((Path(__file__).resolve().parents[1]/'MarketeerForever/AuctionChat.lua').read_text(encoding='utf8'))
 lua.execute('''
-listener.event(nil,'PLAYER_LOGIN');listener.event(nil,'ADDON_LOADED');assert(#CHAT_CONFIG_OTHER_SYSTEM==1)
+listener.event(nil,'PLAYER_LOGIN');listener.event(nil,'ADDON_LOADED');assert(#CHAT_CONFIG_OTHER_SYSTEM==2)
 local setting=CHAT_CONFIG_OTHER_SYSTEM[1];assert(not setting.checked());setting.func(nil,true);assert(setting.checked())
+local mail=CHAT_CONFIG_OTHER_SYSTEM[2];assert(mail.text=='Mailbox' and not mail.checked());mail.func(nil,true);assert(mail.checked())
+listener.event(nil,'CHAT_MSG_LOOT','Not at mailbox');assert(#ChatFrame2.messages==0)
+listener.event(nil,'MAIL_SHOW');listener.event(nil,'CHAT_MSG_LOOT','You receive item: Copper');assert(ChatFrame2.messages[1]=='You receive item: Copper')
+listener.event(nil,'CHAT_MSG_MONEY','You loot 1 Gold');assert(ChatFrame2.messages[2]=='You loot 1 Gold')
+ChatFrame2.messageTypeList={'LOOT'};listener.event(nil,'CHAT_MSG_LOOT','Already visible');assert(#ChatFrame2.messages==2)
+ChatFrame2.messageTypeList={};listener.event(nil,'MAIL_CLOSED');listener.event(nil,'CHAT_MSG_MONEY','Outside');assert(#ChatFrame2.messages==2)
+ChatFrame2.messages={}
 listener.event(nil,'AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION',4,'Linen Cloth');assert(#ChatFrame2.messages==1 and ChatFrame2.messages[1]=='Sold: Linen Cloth');assert(#ChatFrame1.messages==0)
 listener.event(nil,'AUCTION_HOUSE_SHOW_COMMODITY_WON_NOTIFICATION','Copper',3);assert(ChatFrame2.messages[2]=='Won: Copper x3')
 ChatFrame2.messageTypeList={'SYSTEM'};listener.event(nil,'AUCTION_HOUSE_SHOW_NOTIFICATION',1);assert(#ChatFrame2.messages==2)
@@ -42,6 +49,13 @@ listener.event(nil,'AUCTION_HOUSE_SHOW_NOTIFICATION',1);assert(lastChatty[1]==1 
 lastChatty=nil;Chattynator.API.GetWindowsAndTabs=function()return {{'General'}}end
 listener.event(nil,'AUCTION_HOUSE_SHOW_NOTIFICATION',1);assert(lastChatty==nil and #ChatFrame2.messages==2)
 Chattynator.API.GetWindowsAndTabs=function()return {{'General','Auction'}}end
+MarketeerForeverCoreDB.mailChattyTabs={['player-one']={['1'..string.char(31)..'Auction']=true}}
+listener.event(nil,'MAIL_SHOW');lastChatty=nil;listener.event(nil,'CHAT_MSG_LOOT','Mailbox item');assert(lastChatty[1]==1 and lastChatty[2]==2 and lastChatty[3]=='Mailbox item')
+listener.event(nil,'MAIL_CLOSED');lastChatty=nil;listener.event(nil,'CHAT_MSG_MONEY','Outside');assert(lastChatty==nil)
+MarketeerForeverCore.ShowMailboxChatSettings()
+local mailRow
+for _,f in ipairs(frames) do local key=rawget(f,'key');if key and key:find('Auction',1,true) then mailRow=f end end
+assert(mailRow and mailRow.checked);mailRow.checked=false;mailRow.scripts.OnClick(mailRow);assert(not MarketeerForeverCoreDB.mailChattyTabs['player-one'][mailRow.key])
 MarketeerForeverCore.ShowAuctionChatSettings()
 local popup,auctionRow
 for _,f in ipairs(frames) do if f.name=='MarketeerAuctionChatSettings' then popup=f end;local key=rawget(f,'key');if key and key:find('Auction',1,true) then auctionRow=f end end

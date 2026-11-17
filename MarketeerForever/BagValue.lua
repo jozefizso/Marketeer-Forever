@@ -149,6 +149,21 @@ end
 function core.UpdateBagCoinVisibility()
   if valueButton then valueButton:SetShown(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true) end
 end
+-- Reset only the position saved by Marketeer's combined-bag drag handle.
+function core.ResetBagPosition()
+  if MarketeerForeverCoreDB then MarketeerForeverCoreDB.bagPosition=nil end
+  local bags=_G.ContainerFrameCombinedBags
+  if not bags then print('Marketeer: saved bag position cleared.');return end
+  if (InCombatLockdown and InCombatLockdown()) or not canMoveBags(bags) then
+    print('Marketeer: saved bag position cleared. Close and reopen your bags to restore their default position.');return
+  end
+  if type(UpdateContainerFrameAnchors)=='function' then
+    local ok=pcall(UpdateContainerFrameAnchors)
+    if ok then print('Marketeer: bag position reset.');return end
+  end
+  local ok=pcall(function()bags:ClearAllPoints();bags:SetPoint('BOTTOMRIGHT',UIParent,'BOTTOMRIGHT',-50,100)end)
+  print(ok and 'Marketeer: bag position reset.' or 'Marketeer: saved bag position cleared. Close and reopen your bags.')
+end
 local function setup()
   local bags=_G.ContainerFrameCombinedBags
   if display or not bags then return end

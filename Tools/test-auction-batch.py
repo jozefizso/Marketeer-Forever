@@ -23,6 +23,26 @@ state.cancelPending=nil;selectedAuctions[10]=nil;C_AuctionHouse.CanCancelAuction
 cancelNext();assert(called==nil and not approvedBatch)
 ''')
 print('Batch deposit totals and cancellation guards passed.')
+start=source.index('local function requestCancellation(id)')
+end=source.index('local function cancelNext()',start)
+lua.execute('''
+local state={};local approvedBatch=true;local core={active=true};GetServerTime=function()return 100 end
+local blocked=false;local C_AuctionHouse={CancelAuction=function(id) assert(state.cancelPending==id);if blocked then state.cancelPending=nil;approvedBatch=false end end}
+'''+source[start:end]+'''
+assert(requestCancellation(10) and state.cancelPending==10)
+state.cancelPending=nil;blocked=true;assert(not requestCancellation(11) and state.cancelPending==nil and not approvedBatch)
+C_AuctionHouse.CancelAuction=function()error('blocked')end;assert(not requestCancellation(12) and state.cancelPending==nil)
+''')
+start=source.index('  elseif (event=="ADDON_ACTION_BLOCKED"')
+end=source.index('  elseif event=="AUCTION_CANCELED"',start)
+branch=source[start:end].replace('  elseif ', '  if ', 1)+'  end\n'
+lua.execute('''
+local state={cancelPending=10,cancelStarted=100,ownedComplete=true};local approvedBatch=true;local renders=0
+local render=function()renders=renders+1 end;local event,arg,action='ADDON_ACTION_BLOCKED','OtherAddon','C_AuctionHouse.CancelAuction'
+'''+branch+'''
+assert(not state.cancelPending and not state.ownedComplete and state.needOwned and not approvedBatch and renders==1)
+''')
+print('Cancellation failures clear pending state and preserve the need to refresh.')
 start=source.index('local function refreshOwned(fromOwnedUpdate)')
 end=source.index('local function requestOwned()',start)
 lua.execute('''

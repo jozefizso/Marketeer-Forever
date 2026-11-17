@@ -15,6 +15,9 @@ local mt={__index=function(_,k)if k=='pooled' or k=='labelIndex' or k=='labels' 
 function CreateFrame(kind)local o=setmetatable({kind=kind,scripts={},shown=true},mt);objects[#objects+1]=o;return o end
 SlashCmdList={};UIParent=CreateFrame('UI');MarketeerForeverCore={RegisterEscapeFrame=function()error('Shopping list must not close with Escape')end}
 GetItemInfo=function(id)return ({[1]='Powder',[2]='Bar'})[id]end
+MarketeerForeverCoreDB={prices={test={items={[1]={price=123},[2]={price=200,carried=true}}}}}
+MarketeerForeverCore.Market=function()return 'test' end
+MarketeerForeverCore.Subscribe=function(fn)scanCallback=fn end
 bagItems={};NUM_BAG_SLOTS=4;C_Container={GetContainerNumSlots=function(bag)return bag==0 and #bagItems or 0 end,GetContainerItemInfo=function(_,slot)return bagItems[slot]end}
 function fireBags()for _,o in ipairs(objects) do if o.scripts.OnEvent then o.scripts.OnEvent(o,'BAG_UPDATE_DELAYED') end end end
 function shownText(value)for _,o in ipairs(objects) do if o.shown and o.text==value then return true end end end
@@ -25,6 +28,8 @@ lua.execute('''
 local c=MarketeerForeverCore
 c.AddShoppingRecipe({id=7,name='Solid Shot',materials={{id=1,quantity=1},{id=2,quantity=1}},yieldMin=200})
 assert(shownText('Powder') and shownText('Bar') and shownText('0 / 1'))
+assert(shownText('AH / UNIT') and shownText('1s 23c') and shownText('--'))
+MarketeerForeverCoreDB.prices.test.items[1].price=250;scanCallback('complete');assert(shownText('2s 50c'))
 local e=lastEdit();e:SetText('50');e.scripts.OnTextChanged(e,true)
 c.AddShoppingRecipe({id=8,name='Other',materials={{id=1,quantity=2}}});assert(shownText('0 / 52') and shownText('0 / 50'))
 c.AddShoppingVendor({id=20,name='Vendor Item'});assert(shownText('Vendor Item') and shownText('Needed'))

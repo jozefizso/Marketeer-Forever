@@ -183,14 +183,23 @@ local function selectedDeposits()
   end end
   table.sort(ids);return total,unknown,count,table.concat(ids,',')
 end
+local function requestCancellation(id)
+  -- Set pending first: a blocked-action event can fire during the API call.
+  state.cancelPending=id;state.cancelStarted=(GetServerTime and GetServerTime()) or time();state.needOwned=true;state.ownedRequested=nil
+  local ok,err=pcall(C_AuctionHouse.CancelAuction,id)
+  if not ok then
+    state.cancelPending=nil;state.cancelStarted=nil;approvedBatch=false
+    print('Marketeer: cancellation failed: '..tostring(err))
+    return false
+  end
+  return state.cancelPending==id
+end
 local function cancelNext()
   if not core.active or not state.ownedComplete or state.cancelPending or not C_AuctionHouse or not C_AuctionHouse.CancelAuction then return end
   local item=nextSelected();if not item then approvedBatch=false;return end
   if C_AuctionHouse.CanCancelAuction and not C_AuctionHouse.CanCancelAuction(item.auctionID) then print('Marketeer: this listing cannot be cancelled; refresh and review the selection.');approvedBatch=false;return end
   if C_AuctionHouse.IsThrottledMessageSystemReady and not C_AuctionHouse.IsThrottledMessageSystemReady() then print('Marketeer: auction house is busy; try again shortly.');return end
-  local ok,err=pcall(C_AuctionHouse.CancelAuction,item.auctionID)
-  if not ok then approvedBatch=false;print('Marketeer: cancellation failed: '..tostring(err));return end
-  state.cancelPending=item.auctionID;state.cancelStarted=(GetServerTime and GetServerTime()) or time();state.needOwned=true;state.ownedRequested=nil
+  requestCancellation(item.auctionID)
 end
 local function render()
   if not panel then return end
@@ -316,8 +325,7 @@ local function createPanel()
     local found=false;for _,auction in ipairs(owned) do if auction.auctionID==id then found=true;break end end
     if not found then print("Marketeer: that auction is no longer available.");return end
     if C_AuctionHouse.CanCancelAuction and not C_AuctionHouse.CanCancelAuction(id) then print("Marketeer: this auction cannot be cancelled.");return end
-    local ok,err=pcall(C_AuctionHouse.CancelAuction,id)
-    if ok then state.cancelPending=id;state.cancelStarted=(GetServerTime and GetServerTime()) or time();state.needOwned=true;state.ownedRequested=nil;render() else print("Marketeer: cancel failed: "..tostring(err)) end
+    requestCancellation(id);render()
   end)
   local title=panel:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",panel,"TOPLEFT",16,-12);title:SetText("YOUR AUCTIONS")
   local scan=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");scan:SetSize(120,24);scan:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-20,-8);scan:SetText("Scan market");scan:SetScript("OnClick",function() local ok,err=core.Scan();if not ok then print("Marketeer: "..tostring(err)) end end)
@@ -456,8 +464,8 @@ function core.OnOpen()
   if C_Timer and C_Timer.After then C_Timer.After(1,function() if core.active then createPanel();requestOwned() end end) end
 end
 local f=CreateFrame("Frame")
-for _,e in ipairs({"OWNED_AUCTIONS_UPDATED","AUCTION_CANCELED","AUCTION_HOUSE_AUCTION_CREATED","ITEM_SEARCH_RESULTS_UPDATED","ITEM_SEARCH_RESULTS_ADDED","COMMODITY_SEARCH_RESULTS_UPDATED","COMMODITY_SEARCH_RESULTS_ADDED","AUCTION_HOUSE_CLOSED","GET_ITEM_INFO_RECEIVED","ITEM_KEY_ITEM_INFO_RECEIVED"}) do pcall(f.RegisterEvent,f,e) end
-f:SetScript("OnEvent",function(_,event,arg)
+for _,e in ipairs({"OWNED_AUCTIONS_UPDATED","AUCTION_CANCELED","ADDON_ACTION_BLOCKED","ADDON_ACTION_FORBIDDEN","AUCTION_HOUSE_AUCTION_CREATED","ITEM_SEARCH_RESULTS_UPDATED","ITEM_SEARCH_RESULTS_ADDED","COMMODITY_SEARCH_RESULTS_UPDATED","COMMODITY_SEARCH_RESULTS_ADDED","AUCTION_HOUSE_CLOSED","GET_ITEM_INFO_RECEIVED","ITEM_KEY_ITEM_INFO_RECEIVED"}) do pcall(f.RegisterEvent,f,e) end
+f:SetScript("OnEvent",function(_,event,arg,action)
   if event=="OWNED_AUCTIONS_UPDATED" then refreshOwned(true)
   elseif event=="AUCTION_HOUSE_AUCTION_CREATED" then
     local now=(GetServerTime and GetServerTime()) or time()
@@ -466,6 +474,9 @@ f:SetScript("OnEvent",function(_,event,arg)
       MarketeerForeverCoreDB.auctionDeposits[tostring(arg)]=pendingDeposit
     end
     pendingDeposit=nil;state.ownedComplete=false;state.needOwned=true;state.ownedRequested=nil;if MarketeerForeverMarketOwnedChanged then MarketeerForeverMarketOwnedChanged() end;requestOwned()
+  elseif (event=="ADDON_ACTION_BLOCKED" or event=="ADDON_ACTION_FORBIDDEN") and state.cancelPending and type(action)=="string" and action:find("CancelAuction",1,true) then
+    state.cancelPending=nil;state.cancelStarted=nil;approvedBatch=false;state.ownedComplete=false;state.needOwned=true;state.ownedRequested=nil
+    print("Marketeer: WoW blocked the cancellation"..(type(arg)=="string" and (" (reported addon: "..arg..")") or "")..". Refreshing listings; no cancellation was confirmed.");render()
   elseif event=="AUCTION_CANCELED" then
     local id=state.cancelPending
     local confirmed=id and type(arg)=='number' and arg==id
@@ -486,7 +497,7 @@ local interval=0;f:SetScript("OnUpdate",function(_,delta)
   interval=interval+delta;if interval<.5 then return end;interval=0
   if state.needOwned and core.active then
     local n=(GetServerTime and GetServerTime()) or time()
-    if state.cancelPending and state.cancelStarted and n-state.cancelStarted>20 then
+    if state.cancelPending and state.cancelStarted and n-state.cancelStarted>8 then
       state.cancelPending=nil;state.cancelStarted=nil;approvedBatch=false;state.ownedComplete=false;state.ownedRequested=nil;print("Marketeer: cancellation not confirmed; refreshing auctions. Check the listing and review the selection before trying again.");render()
     end
     if not state.ownedRequested or n-state.ownedRequested>10 then requestOwned() end

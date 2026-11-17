@@ -106,7 +106,12 @@ local function render()
     local active=item and selectedID and (item.key or item.id)==selectedID
     if active then row:SetBackdropColor(.18,.34,.26,1) else row:SetBackdropColor(i%2==0 and .10 or .075,.10,.11,.95) end
     if item then
-      row.name:SetText(item.name .. "  |cff829494#" .. item.id .. "|r")
+      if viewMode=="craft" then
+        row.name:SetWidth(155);row.name:SetText(item.name)
+        local quantity=MarketeerForeverCore.OwnedItemQuantity and MarketeerForeverCore.OwnedItemQuantity(item.id)
+        local display=quantity~=nil and ((BreakUpLargeNumbers and BreakUpLargeNumbers(quantity)) or tostring(quantity)) or "--"
+        row.selling:SetText("|cff73e6a3"..display.." selling|r");row.selling:Show()
+      else row.name:SetWidth(245);row.name:SetText(item.name .. "  |cff829494#" .. item.id .. "|r");row.selling:Hide() end
       if viewMode == "craft" then
         local r=item.recipe
         row.vendor:SetText(r.profession.." | skill "..tostring(r.required or "?")..(r.trainerSkill and "*" or "")..(item.known and " | |cff73e6a3known|r" or " | |cffffa340unknown|r")..(item.conditional and " | needs higher yield" or ""))
@@ -361,6 +366,7 @@ local function createPanel()
   for i=1,ROWS_PER_PAGE do
     local row=CreateFrame("Button",nil,panel,"BackdropTemplate");row:SetPoint("TOPLEFT",panel,"TOPLEFT",10,-145-(i-1)*34);row:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-32,-145-(i-1)*34);row:SetHeight(33);row:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});row:SetBackdropColor(i%2==0 and 0.10 or 0.075,0.10,0.11,0.95)
     row.name=makeText(row,nil,8,-4,245,"GameFontHighlightSmall");row.vendor=makeText(row,nil,8,-19,245,"GameFontDisableSmall")
+    row.selling=makeText(row,nil,166,-4,88,"GameFontHighlightSmall");row.selling:SetJustifyH("RIGHT")
     row.buy=makeText(row,nil,265,-11,95);row.ah=makeText(row,nil,370,-11,95);row.gain=makeText(row,nil,475,-11,95);row.gain:SetTextColor(0.45,0.9,0.64);row.stackGain=makeText(row,nil,580,-11,100);row.stackGain:SetTextColor(0.45,0.9,0.64);row.activity=makeText(row,nil,690,-11,90);row.listed=makeText(row,nil,790,-11,75);row.gap=makeText(row,nil,875,-11,90)
     row:SetScript("OnClick",function(self,button) if self.item then if (not button or button=="LeftButton") and IsAltKeyDown and IsAltKeyDown() and MarketeerForeverCore.ShowMarketHistory then MarketeerForeverCore.ShowMarketHistory(self.item.id) else setSelected(self.item) end end end);rows[i]=row
   end
@@ -550,6 +556,7 @@ end
 local events=CreateFrame("Frame")
 events:RegisterEvent("AUCTION_HOUSE_SHOW")
 events:SetScript("OnEvent",function() if C_Timer and C_Timer.After then C_Timer.After(0.5,registerTab) else registerTab() end end)
+function MarketeerForeverCraftOwnedChanged() if panel and panel:IsShown() and viewMode=="craft" then render() end end
 function MarketeerForeverCraftRefreshFlips() if panel and panel:IsShown() then calculate() end end
 function MarketeerForeverCraftShowCrafting()
   if not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then print("Market Crafting: open the auction house first.");return end

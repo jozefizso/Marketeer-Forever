@@ -18,7 +18,7 @@ reopened=0
 MarketeerForeverCore.OpenTradingMenu=function()reopened=reopened+1;MarketeerForeverMenu.shown=true end
 pins={}
 function CreateFrame()
- local p={shown=false,scripts={}};function p:SetSize()end;function p:SetScale(v)self.scale=v end;function p:EnableMouse()end;function p:SetFrameLevel()end;function p:SetScript(k,v)self.scripts[k]=v end
+ local p={shown=false,scripts={}};function p:SetSize(w,h)self.width=w;self.height=h end;function p:SetScale(v)self.scale=v end;function p:EnableMouse()end;function p:SetFrameLevel()end;function p:SetScript(k,v)self.scripts[k]=v end
  function p:ClearAllPoints()end;function p:SetPoint(...)self.pos={...}end;function p:Show()self.shown=true end;function p:Hide()self.shown=false end
  function p:CreateTexture()local t={SetAllPoints=function()end,SetTexture=function(self,v)self.texture=v end,SetBlendMode=function(self,v)self.blend=v end,SetVertexColor=function()end,SetAtlas=function(self,v)self.atlas=v end};self.icon=t;return t end
  pins[#pins+1]=p;return p
@@ -52,7 +52,9 @@ assert(c.FarmMapOpen(-1,dungeon[1]));WorldMapFrame:Hide();assert(reopened==1 and
 assert(c.FarmMapOpen(2559,zones[1]) and opened==1417 and #pins>0 and pins[1].shown)
 assert(math.abs(focused[1]-.4)<.00001 and math.abs(focused[2]-.6)<.00001)
 assert(pins[1].icon.atlas=='Waypoint-MapPin-Untracked')
-assert(pins[1].scale==1);canvasScale=4;callbacks.OpenMap_ViewChanged();assert(pins[1].scale==.25);canvasScale=.5;callbacks.OpenMap_ViewChanged();assert(pins[1].scale==2)
+assert(pins[1].width==12 and pins[1].pos[4]==400 and pins[1].pos[5]==-480)
+canvasScale=4;callbacks.OpenMap_ViewChanged();assert(pins[1].width==3 and pins[1].pos[4]==400 and pins[1].pos[5]==-480 and pins[1].scale==nil)
+canvasScale=.5;callbacks.OpenMap_ViewChanged();assert(pins[1].width==24 and pins[1].pos[4]==400 and pins[1].pos[5]==-480 and pins[1].scale==nil)
 pins[1].scripts.OnEnter(pins[1]);assert(tooltipText:find('Highland Strider',1,true) and tooltipText:find('Classic spawn reference',1,true));pins[1].scripts.OnLeave(pins[1]);assert(not GameTooltip.owner)
 assert(c.FarmMapOpen(-1,zones[1]) and opened==1417 and not pins[1].shown)
 assert(c.FarmMapOpen(2559,zones[1]) and pins[1].shown)

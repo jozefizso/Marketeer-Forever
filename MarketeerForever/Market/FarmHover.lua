@@ -20,6 +20,7 @@ for _,col in ipairs(columns) do text(col.x,-143,col.width,'GameFontNormalSmall')
 local lines={};for i=1,3 do local row={};for _,col in ipairs(columns) do row[col.key]=text(col.x,-160-(i-1)*17,col.width) end;lines[i]=row end
 local note=text(14,-218,315);note:SetText('|cff91a99a1 per drop; assumes sales. No deposit costs.|r')
 local shownID,shownLevel,dismissedID,dragging,userPositioned
+local toggled=false
 local function modifier()
   local key=MarketeerForeverCoreDB and MarketeerForeverCoreDB.farmHoverKey
   if key=='CTRL' or key=='ALT' or key=='OFF' then return key end
@@ -32,17 +33,23 @@ local function modifierDown()
   if key=='ALT' then return IsAltKeyDown and IsAltKeyDown() end
   return key=='SHIFT' and IsShiftKeyDown and IsShiftKeyDown()
 end
+local function toggleMode() return MarketeerForeverCoreDB and MarketeerForeverCoreDB.farmHoverToggle==true end
+local function snapshotActive()
+  if (not MarketeerForeverCoreDB or MarketeerForeverCoreDB.farmHoverNoCombat~=false) and InCombatLockdown and InCombatLockdown() then return false end
+  if modifier()=='OFF' then return false end
+  return toggleMode() and toggled or (not toggleMode() and modifierDown())
+end
 card:SetScript('OnDragStart',function(self)
-  if modifierDown() then dragging=true;self:StartMoving() end
+  if snapshotActive() then dragging=true;self:StartMoving() end
 end)
 card:SetScript('OnDragStop',function(self)
   if dragging then self:StopMovingOrSizing();dragging=false;userPositioned=true end
 end)
 local open=CreateFrame('Button',nil,card,'UIPanelButtonTemplate');open:SetSize(110,23);open:SetPoint('BOTTOMLEFT',card,'BOTTOMLEFT',14,10);open:SetText('Open Farm')
-open:SetScript('OnClick',function()if shownID and core.ShowFarmMonster then local id,level=shownID,shownLevel;dismissedID=id;card:Hide();shownID=nil;shownLevel=nil;core.ShowFarmMonster(id,level) end end)
+open:SetScript('OnClick',function()if shownID and core.ShowFarmMonster then local id,level=shownID,shownLevel;dismissedID=id;toggled=false;card:Hide();shownID=nil;shownLevel=nil;core.ShowFarmMonster(id,level) end end)
 local moveHint=text(137,-242,210)
 local close=CreateFrame('Button',nil,card,'UIPanelButtonTemplate');close:SetSize(25,22);close:SetPoint('TOPRIGHT',card,'TOPRIGHT',-9,-15);close:SetText('X')
-close:SetScript('OnClick',function()dismissedID=shownID;shownID=nil;card:Hide()end)
+close:SetScript('OnClick',function()dismissedID=shownID;shownID=nil;toggled=false;card:Hide()end)
 local function money(n)
   if type(n)~='number' then return '--' end
   n=math.floor(n+.5);local g=math.floor(n/10000);local s=math.floor(n%10000/100);local c=n%100
@@ -59,7 +66,7 @@ local function mouseoverID()
 end
 local function update()
   if dragging then return end
-  if not modifierDown() then return end
+  if not snapshotActive() then return end
   local id=mouseoverID();if not id or id==dismissedID then return end
   if GameTooltip and GameTooltip.IsShown and not GameTooltip:IsShown() then return end
   local mob=MarketeerForeverFarmData and MarketeerForeverFarmData.mobs[id]
@@ -107,23 +114,35 @@ local function update()
       if x<400 then card:SetPoint('TOPLEFT',UIParent,'BOTTOMLEFT',x+width*scale+10,y) else card:SetPoint('TOPRIGHT',UIParent,'BOTTOMLEFT',x-10,y) end
     else card:SetPoint('CENTER',UIParent,'CENTER',0,0) end
   end
-  local key=modifier();moveHint:SetText('|cff91a99a'..(key=='CTRL' and 'Ctrl' or key=='ALT' and 'Alt' or 'Shift')..' + drag to move|r')
+  local key=modifier();moveHint:SetText(toggleMode() and '|cff91a99aDrag to move|r' or ('|cff91a99a'..(key=='CTRL' and 'Ctrl' or key=='ALT' and 'Alt' or 'Shift')..' + drag to move|r'))
   shownID=id;card:Show()
 end
 local events=CreateFrame('Frame');events:RegisterEvent('UPDATE_MOUSEOVER_UNIT');events:RegisterEvent('MODIFIER_STATE_CHANGED');events:RegisterEvent('PLAYER_ENTERING_WORLD')
-events:SetScript('OnEvent',function(_,event,key)
-  if event=='MODIFIER_STATE_CHANGED' and not modifierDown() then
-    if dragging then card:StopMovingOrSizing();dragging=false;userPositioned=true end
-    dismissedID=nil;shownID=nil;card:Hide();return
+local function hideSnapshot()
+  if dragging then card:StopMovingOrSizing();dragging=false;userPositioned=true end
+  dismissedID=nil;shownID=nil;card:Hide()
+end
+function core.ResetFarmHoverState() toggled=false;hideSnapshot() end
+events:SetScript('OnEvent',function(_,event,key,down)
+  if event=='PLAYER_ENTERING_WORLD' then toggled=false;hideSnapshot();return end
+  if event=='MODIFIER_STATE_CHANGED' and toggleMode() then
+    local selected=modifier()
+    local matches=(selected=='SHIFT' and (key=='LSHIFT' or key=='RSHIFT')) or (selected=='CTRL' and (key=='LCTRL' or key=='RCTRL')) or (selected=='ALT' and (key=='LALT' or key=='RALT'))
+    if matches and down==1 and not (GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()) then
+      if toggled then toggled=false;hideSnapshot();return end
+      if modifierDown() and mouseoverID() then toggled=true;dismissedID=nil;update() end
+    end
+    return
   end
+  if event=='MODIFIER_STATE_CHANGED' and not snapshotActive() then hideSnapshot();return end
   update()
 end)
 local elapsed=0
 events:SetScript('OnUpdate',function(_,dt)
   elapsed=elapsed+dt;if elapsed<.2 then return end;elapsed=0
-  if not modifierDown() then
-    if dragging then card:StopMovingOrSizing();dragging=false;userPositioned=true end
-    dismissedID=nil;shownID=nil;if card:IsShown() then card:Hide() end;return
+  if not snapshotActive() then
+    if toggleMode() and InCombatLockdown and InCombatLockdown() and (not MarketeerForeverCoreDB or MarketeerForeverCoreDB.farmHoverNoCombat~=false) then toggled=false end
+    if card:IsShown() or dragging or dismissedID or shownID then hideSnapshot() end;return
   end
   local id=mouseoverID();local visible=not GameTooltip or not GameTooltip.IsShown or GameTooltip:IsShown()
   if id and visible and id~=dismissedID and (not card:IsShown() or shownID~=id) then update() end

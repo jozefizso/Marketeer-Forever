@@ -700,7 +700,7 @@ end)
 function MarketeerForeverMarketRefreshFlips()
   if panel and panel:IsShown() then if viewMode=="resale" then updateResaleStatus() else calculate() end end
 end
-function MarketeerForeverMarketOwnedChanged() if panel and panel:IsShown() and viewMode=="flips" then render() end end
+function MarketeerForeverMarketOwnedChanged() if panel and panel:IsShown() and viewMode=="flips" then render() end;if MarketeerForeverCraftOwnedChanged then MarketeerForeverCraftOwnedChanged() end end
 MarketeerForeverCore.Subscribe(function(event)
   if event~="complete" then return end
   resaleCache=nil

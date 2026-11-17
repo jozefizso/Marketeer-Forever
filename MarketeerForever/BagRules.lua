@@ -71,9 +71,9 @@ local function lowestVendorRule()
   end
   return lowest
 end
-local function matchingRule(id,link,bag,slot)
+local function matchingRule(id,link,bag,slot,showExcluded)
   local excluded=MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagValueExclusions
-  if excluded and excluded[tostring(id)] then return nil end
+  if excluded and excluded[tostring(id)] and not showExcluded then return nil end
   local ah,vendor=priceFor(id),vendorFor(id,link)
   if type(vendor)~="number" or vendor<=0 then return nil end
   if type(ah)~="number" or ah<=0 then
@@ -106,6 +106,9 @@ function core.BagRuleValue(item)
   if vendor then return vendor,"vendor" end
   if ah then return ah,"auction" end
 end
+local function showExcludedMarkers()
+  return MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagMarkersShowExcludedOnShift==true and IsShiftKeyDown and IsShiftKeyDown()
+end
 local function paint(button,bag,slot)
   local dot=dots[button]
   if not markersVisible() then if dot then dot:Hide() end;return end
@@ -117,7 +120,7 @@ local function paint(button,bag,slot)
   end
   local info=C_Container and C_Container.GetContainerItemInfo and C_Container.GetContainerItemInfo(bag,slot)
   local id=info and (info.itemID or (info.hyperlink and tonumber(info.hyperlink:match("item:(%d+)"))))
-  local selected=id and matchingRule(id,info.hyperlink,bag,slot)
+  local selected=id and matchingRule(id,info.hyperlink,bag,slot,showExcludedMarkers())
   if not selected then if dot then dot:Hide() end;return end
   dot:SetColorTexture(selected.r or 1,selected.g or 1,selected.b or 1,1);dot:Show()
 end
@@ -256,7 +259,7 @@ local function setupBaganator()
     local location=details.itemLocation
     local bag=location and location.bagID;local slot=location and (location.slotIndex or location.slotID)
     if location and location.GetBagAndSlot and (type(bag)~="number" or type(slot)~="number") then local ok,b,s=pcall(location.GetBagAndSlot,location);if ok then bag,slot=b,s end end
-    local rule=matchingRule(id,link,bag,slot)
+    local rule=matchingRule(id,link,bag,slot,showExcludedMarkers())
     if not rule then return false end
     texture:SetColorTexture(rule.r or 1,rule.g or 1,rule.b or 1,1);return true
   end,function(button)
@@ -311,9 +314,6 @@ local function buildWindow()
   window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});window:SetBackdropColor(.055,.065,.07,.98);window:SetBackdropBorderColor(.35,.42,.37,1)
   local title=window:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",16,-16);title:SetText("BAG SELLING RULES")
   local note=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",16,-43);note:SetPoint("TOPRIGHT",-16,-43);note:SetJustifyH("LEFT");note:SetText("Each rule compares the auction house (AH) price with the vendor sell price. AH premium = (AH price - vendor price) / AH price. The highest matching threshold wins; when a vendor pays more, the lowest Vendor rule applies.\n\nFor bag value, choose AH if you plan to auction matching items, or Vendor if you plan to sell them to an NPC. This choice only changes the estimate; it does not sell items.")
-  local tradingOnly=CreateFrame("CheckButton",nil,window,"UICheckButtonTemplate");tradingOnly:SetSize(24,24);tradingOnly:SetPoint("TOPLEFT",16,-119)
-  local tradingLabel=window:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");tradingLabel:SetPoint("LEFT",tradingOnly,"RIGHT",2,0);tradingLabel:SetText("Only show dots at the auction house or vendor (hold Shift to show)")
-  tradingOnly:SetScript("OnClick",function(self) MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.bagMarkersTradingOnly=self:GetChecked() and true or false;schedule() end)
   local methodHeading=window:CreateFontString(nil,"OVERLAY","GameFontNormalSmall");methodHeading:SetPoint("TOPLEFT",270,-145);methodHeading:SetText("BAG VALUE USES")
   for i=1,6 do
     local row={};rows[i]=row
@@ -367,7 +367,6 @@ local function buildWindow()
   local close=CreateFrame("Button",nil,window,"UIPanelButtonTemplate");close:SetSize(90,25);close:SetPoint("BOTTOMRIGHT",-22,14);close:SetText("Close");close:SetScript("OnClick",function() window:Hide() end)
   window:SetScript("OnShow",function()
     local saved=rules()
-    tradingOnly:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagMarkersTradingOnly==true)
     for i,row in ipairs(rows) do local rule=saved[i];row.threshold:SetText(rule and tostring(rule.threshold) or "");row.r,row.g,row.b=rule and rule.r or 1,rule and rule.g or 1,rule and rule.b or 1;row.saleMethod=rule and ruleMethod(rule) or "vendor";row.junk:SetChecked(rule and rule.junk==true);row.method:SetText((row.saleMethod=="auction" and "AH" or "Vendor").."  v");row.methodMenu:Hide();row.swatch:SetColorTexture(row.r,row.g,row.b,1) end
     status:SetText("Each rule chooses AH or vendor for bag value. AH cut, binding and deposits are not included.")
   end)
