@@ -271,16 +271,24 @@ local function browseResults(event,payload)
   if core.OnBrowseComplete then core.OnBrowseComplete(rows) end
 end
 local events=CreateFrame("Frame")
+local showFirstInstallNotice=false
 for _,event in ipairs({"ADDON_LOADED","PLAYER_LOGIN","AUCTION_HOUSE_SHOW","AUCTION_HOUSE_CLOSED","AUCTION_HOUSE_BROWSE_RESULTS_UPDATED","AUCTION_HOUSE_BROWSE_RESULTS_ADDED","AUCTION_HOUSE_BROWSE_FAILURE","AUCTION_HOUSE_THROTTLED_MESSAGE_RESPONSE_RECEIVED"}) do pcall(events.RegisterEvent,events,event) end
 events:SetScript("OnEvent",function(_,event,arg)
   if event=="ADDON_LOADED" and arg=="MarketeerForever" then
+    -- Existing and migrated installations should not receive the first-install notice.
+    showFirstInstallNotice=type(MarketeerForeverCoreDB)~="table" and type(MarketeerForeverMarketDB)~="table" and type(MarketeerForeverCraftDB)~="table" and type(NokiUnifiedCoreDB)~="table" and type(NokiUnifiedMarketDB)~="table" and type(NokiUnifiedCraftDB)~="table"
     -- Legacy names are declared only to migrate a copied Noki Trading save once.
     if type(MarketeerForeverCoreDB)~="table" and type(NokiUnifiedCoreDB)=="table" then MarketeerForeverCoreDB=NokiUnifiedCoreDB end
     if type(MarketeerForeverMarketDB)~="table" and type(NokiUnifiedMarketDB)=="table" then MarketeerForeverMarketDB=NokiUnifiedMarketDB end
     if type(MarketeerForeverCraftDB)~="table" and type(NokiUnifiedCraftDB)=="table" then MarketeerForeverCraftDB=NokiUnifiedCraftDB end
     NokiUnifiedCoreDB=nil;NokiUnifiedMarketDB=nil;NokiUnifiedCraftDB=nil
     MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.prices=MarketeerForeverCoreDB.prices or {};if MarketeerForeverCoreDB.bagCoinEnabled==nil then MarketeerForeverCoreDB.bagCoinEnabled=true end;if MarketeerForeverCoreDB.autoScan==nil then MarketeerForeverCoreDB.autoScan=true end;core.SetAutoScanInterval(MarketeerForeverCoreDB.scanIntervalMinutes or 30)
-  elseif event=="PLAYER_LOGIN" then core.RestoreQuantitiesFromScan()
+  elseif event=="PLAYER_LOGIN" then
+    if showFirstInstallNotice then
+      showFirstInstallNotice=false
+      print("Marketeer: You no longer need Auctionator or Auctioneer; Marketeer replaces both. You can disable them in your AddOns list.")
+    end
+    core.RestoreQuantitiesFromScan()
   elseif event=="AUCTION_HOUSE_SHOW" then core.active=true;updateSellScanNotice();setupSellListLayout();if core.OnOpen then core.OnOpen() end
   elseif event=="AUCTION_HOUSE_CLOSED" then
     core.active=false;if core.phase~="idle" then core.phase="idle";announce("failed") end

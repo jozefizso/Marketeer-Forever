@@ -28,13 +28,18 @@ lua.execute('''
 local c=MarketeerForeverCore
 c.AddShoppingRecipe({id=7,name='Solid Shot',materials={{id=1,quantity=1},{id=2,quantity=1}},yieldMin=200})
 assert(shownText('Powder') and shownText('Bar') and shownText('0 / 1'))
-assert(shownText('AH / UNIT') and shownText('1s 23c') and shownText('--'))
+assert(shownText('AH / UNIT') and shownText('TO BUY') and shownText('1s 23c') and shownText('--'))
+assert(shownText('To buy (latest scan): at least 1s 23c | 1 unavailable'))
+MarketeerForeverCoreDB.prices.test.items[2].carried=false;scanCallback('complete')
+assert(shownText('To buy (latest scan): 3s 23c') and shownText('2s'))
+MarketeerForeverCoreDB.prices.test.items[2].carried=true;scanCallback('complete')
 MarketeerForeverCoreDB.prices.test.items[1].price=250;scanCallback('complete');assert(shownText('2s 50c'))
 local e=lastEdit();e:SetText('50');e.scripts.OnTextChanged(e,true)
 c.AddShoppingRecipe({id=8,name='Other',materials={{id=1,quantity=2}}});assert(shownText('0 / 52') and shownText('0 / 50'))
 c.AddShoppingVendor({id=20,name='Vendor Item'});assert(shownText('Vendor Item') and shownText('Needed'))
 bagItems={{itemID=1,stackCount=52},{itemID=2,stackCount=20},{itemID=20,stackCount=1}};fireBags()
 assert(shownText('|cff73e6a3[OK] 52 / 52|r') and shownText('20 / 50') and shownText('|cff73e6a3[OK]|r'))
+assert(shownText('To buy (latest scan): at least 0c | 1 unavailable') and shownText('0c'))
 bagItems={};fireBags();assert(shownText('0 / 52') and shownText('Needed'))
 bagItems={{itemID=2,stackCount=20}}
 c.active=true;c.phase='idle';c.CheckBuyout=function(key,callback)callback({tiers={{price=123}}});return true end
@@ -54,6 +59,19 @@ chosenQuantity=nil;c.OpenShoppingMaterial(2,3)
 for _,o in ipairs(objects) do if o.scripts.OnEvent then o.scripts.OnEvent(o,'COMMODITY_SEARCH_RESULTS_RECEIVED') end end
 for _,o in ipairs(objects) do if o.scripts.OnUpdate then o.scripts.OnUpdate(o,.3) end end
 assert(chosenQuantity==3)
+chosenQuantity=nil;local queryContext,queryID
+AuctionHouseSearchContext.BuyItems=2
+AuctionHouseFrame.QueryItem=function(_,context,key)queryContext=context;queryID=key.itemID end
+assert(c.OpenAuctionListings(2,123));assert(openedID==2 and openedPrice==123 and queryContext==1 and queryID==2)
+for _,o in ipairs(objects) do if o.scripts.OnUpdate then o.scripts.OnUpdate(o,.3) end end
+assert(chosenQuantity==nil)
+C_AuctionHouse.GetItemKeyInfo=function()return {isCommodity=false}end
+assert(c.OpenAuctionListings(1,55));assert(openedID==1 and queryContext==2 and queryID==1)
+local seenKey;AuctionHouseFrame.SelectBrowseResult=function(_,result)seenKey=result.itemKey end
+local variant={itemID=1,itemLevel=7,itemSuffix=9,battlePetSpeciesID=0};assert(c.OpenAuctionListings(1,55,variant) and seenKey==variant)
+MarketeerForeverCoreDB.prices.test.items[1].variant='12:3:0';assert(c.OpenAuctionListings(1,55) and seenKey.itemLevel==12 and seenKey.itemSuffix==3)
+c.phase='browse';assert(not c.OpenAuctionListings(2,123));c.phase='idle'
+assert(not c.OpenAuctionListings(2,nil))
 ''')
 print('Shopping quantities, bag progress and auction buy-view quantity passed.')
 lua.execute('''

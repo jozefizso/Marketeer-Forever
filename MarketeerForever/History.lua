@@ -55,24 +55,32 @@ function core.CreateHistoryPanel(parent)
   note:ClearAllPoints();note:SetPoint('BOTTOMLEFT',p,'BOTTOMLEFT',22,20)
   status:ClearAllPoints();status:SetPoint('CENTER',chart,'CENTER',0,0)
   local range='all';local itemId;local lines={};local dots={};local displayed={};local graphStart,graphEnd
-  local results,resultsPage,selectedResult={},1,1
+  local results,resultsOffset,selectedResult={},0,1
   local searchIndex,indexData,indexCatalog,indexMarket
   local suppressSearch=false;local searchSerial=0;local renderedQuery;local searchJob;local pendingChoose=false
   local resultPanel=CreateFrame('Frame',nil,p,'BackdropTemplate');resultPanel:SetPoint('TOPLEFT',input,'BOTTOMLEFT',-4,-3);resultPanel:SetSize(374,147);resultPanel:SetFrameLevel(p:GetFrameLevel()+20);resultPanel:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});resultPanel:SetBackdropColor(.025,.045,.038,1);resultPanel:SetBackdropBorderColor(.22,.58,.36,1);resultPanel:Hide()
   local resultRows={};local resultPageLabel=label(resultPanel,'GameFontHighlightSmall',90,-125,275)
   local draw,selectRange
   local function renderResults()
-    local maxPage=math.max(1,math.ceil(#results/5));resultsPage=math.max(1,math.min(maxPage,resultsPage))
-    for i,b in ipairs(resultRows) do local index=(resultsPage-1)*5+i;local v=results[index];b.item=v;if v then b.caption:SetText(v.name);b.idText:SetText('#'..v.id);b:SetBackdropColor(index==selectedResult and .12 or .04,index==selectedResult and .19 or .07,index==selectedResult and .13 or .055,1);b:Show() else b:Hide() end end
-    resultPageLabel:SetText(#results==0 and 'No matching items with history' or (#results..' matches  |  '..resultsPage..' / '..maxPage))
+    resultsOffset=math.max(0,math.min(math.max(0,#results-5),resultsOffset))
+    for i,b in ipairs(resultRows) do local index=resultsOffset+i;local v=results[index];b.item=v;if v then b.caption:SetText(v.name);b.idText:SetText('#'..v.id);b:SetBackdropColor(index==selectedResult and .12 or .04,index==selectedResult and .19 or .07,index==selectedResult and .13 or .055,1);b:Show() else b:Hide() end end
+    resultPageLabel:SetText(#results==0 and 'No matching items with history' or ((resultsOffset+1)..'-'..math.min(resultsOffset+5,#results)..' of '..#results..' matches  |  scroll'))
   end
+  local function scrollResults(delta)
+    if #results==0 then return end
+    resultsOffset=math.max(0,math.min(math.max(0,#results-5),resultsOffset+delta))
+    selectedResult=resultsOffset+1;renderResults()
+  end
+  local function wheelResults(_,delta) if delta~=0 then scrollResults(delta>0 and -1 or 1) end end
+  resultPanel:EnableMouseWheel(true);resultPanel:SetScript('OnMouseWheel',wheelResults)
   local function choose(v)
     if not v then return end
     searchSerial=searchSerial+1;searchJob=nil;pendingChoose=false;itemId=v.id;suppressSearch=true;input:SetText(v.name or tostring(v.id));suppressSearch=false;input:ClearFocus();resultPanel:Hide();selectRange('all')
   end
-  for i=1,5 do local b=button(resultPanel,'',4,-4-(i-1)*23,366,function(self)choose(self.item)end);b.caption:ClearAllPoints();b.caption:SetPoint('LEFT',b,'LEFT',9,0);b.caption:SetWidth(275);b.caption:SetJustifyH('LEFT');b.idText=b:CreateFontString(nil,'OVERLAY','GameFontDisableSmall');b.idText:SetPoint('RIGHT',b,'RIGHT',-8,0);resultRows[i]=b end
-  button(resultPanel,'<',5,-121,35,function()resultsPage=math.max(1,resultsPage-1);selectedResult=(resultsPage-1)*5+1;renderResults()end)
-  button(resultPanel,'>',43,-121,35,function()resultsPage=math.min(math.max(1,math.ceil(#results/5)),resultsPage+1);selectedResult=(resultsPage-1)*5+1;renderResults()end)
+  for i=1,5 do local b=button(resultPanel,'',4,-4-(i-1)*23,366,function(self)choose(self.item)end);b.caption:ClearAllPoints();b.caption:SetPoint('LEFT',b,'LEFT',9,0);b.caption:SetWidth(275);b.caption:SetJustifyH('LEFT');b.idText=b:CreateFontString(nil,'OVERLAY','GameFontDisableSmall');b.idText:SetPoint('RIGHT',b,'RIGHT',-8,0);b:EnableMouseWheel(true);b:SetScript('OnMouseWheel',wheelResults);resultRows[i]=b end
+  local previous=button(resultPanel,'<',5,-121,35,function()scrollResults(-5)end)
+  local nextPage=button(resultPanel,'>',43,-121,35,function()scrollResults(5)end)
+  for _,b in ipairs({previous,nextPage}) do b:EnableMouseWheel(true);b:SetScript('OnMouseWheel',wheelResults) end
   local recipeButton=button(p,'Recipe',428,-158,75,function()if itemId and core.ShowItemRecipes then core.ShowItemRecipes(itemId) end end)
   local lootButton=button(p,'Monster loot',508,-158,96,function()if itemId and core.ShowItemDrops then core.ShowItemDrops(itemId) end end)
   recipeButton:Hide();lootButton:Hide()
@@ -153,7 +161,7 @@ function core.CreateHistoryPanel(parent)
     local raw=input:GetText() or '';local query=raw:match('^%s*(.-)%s*$'):lower();renderedQuery=raw
     searchJob=nil
     if #query<2 or query:match('^%d+$') or query:find('item:',1,true) then resultPanel:Hide();return end
-    results={};resultsPage=1;selectedResult=1;renderResults();resultPageLabel:SetText('Searching...');resultPanel:Show()
+    results={};resultsOffset=0;selectedResult=1;renderResults();resultPageLabel:SetText('Searching...');resultPanel:Show()
     local serial=searchSerial
     searchJob=coroutine.create(function()
       local prefix,other={},{}
@@ -196,7 +204,7 @@ function core.CreateHistoryPanel(parent)
   input:SetScript('OnArrowPressed',function(_,key)
     if not resultPanel:IsShown() or #results==0 then return end
     if key=='DOWN' then selectedResult=math.min(#results,selectedResult+1) elseif key=='UP' then selectedResult=math.max(1,selectedResult-1) else return end
-    resultsPage=math.ceil(selectedResult/5);renderResults()
+    if selectedResult<=resultsOffset then resultsOffset=selectedResult-1 elseif selectedResult>resultsOffset+5 then resultsOffset=selectedResult-5 end;renderResults()
   end)
   button(p,'Search',346,-158,75,search)
   local options={{'All','all'},{'24h','24h'},{'48h','48h'},{'7d','7d'},{'14d','14d'}}

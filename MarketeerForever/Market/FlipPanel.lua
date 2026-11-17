@@ -8,7 +8,8 @@ local scrollOffset, sortMode, selectedID = 0, "gain", nil
 local scrollbar, updatingScrollbar
 local viewMode, modeButton, headerTexts, flipControls, title, subtitle = "flips", nil, {}, {}, nil, nil
 local marketViewMode="flips"
-local selectedItem,resaleCheckButton,resaleViewButton,wowheadButton,shoppingButton
+MarketeerForeverCore.AuctionPanelExtraWidth=367
+local selectedItem,resaleCheckButton,resaleViewButton,wowheadButton,shoppingButton,auctionButton
 local openResale,checkResaleItem,tryOpenResale
 local returningFromResaleView,skipNextMarketRefresh,resaleReturnItem=false,false,nil
 local resaleQueue,resaleIndex,resaleEpoch,resaleChecked,resaleUnavailable,resaleUnknown={},1,0,0,0,0
@@ -17,6 +18,18 @@ local resaleCache
 local knownButton, captureButton, minProfitLabel, searchHint
 local sortLabels = {gain="Gain per unit", roi="Return %", activity="Est. sales/day",gap="Gap"}
 local gapAscending=false
+local requestedRowIcons={}
+function MarketeerForeverCore.MarketRowIcon(id)
+  if type(id)~='number' then return 134400 end
+  local function lookup(fn)
+    if type(fn)~='function' then return nil end
+    local ok,icon=pcall(fn,id);if ok and (not issecretvalue or not issecretvalue(icon)) and icon then return icon end
+  end
+  local icon=lookup(C_Item and C_Item.GetItemIconByID) or lookup(GetItemIcon)
+  if icon then return icon end
+  if not requestedRowIcons[id] and C_Item and C_Item.RequestLoadItemDataByID then requestedRowIcons[id]=true;pcall(C_Item.RequestLoadItemDataByID,id) end
+  return 134400
+end
 local function marketGap(item)
   local sales=item.remote and item.remote.sales
   if item.variant or type(item.quantity)~="number" or type(sales)~="number" then return nil end
@@ -29,7 +42,7 @@ local function gapLess(a,b)
   if a.name~=b.name then return a.name:lower()<b.name:lower() end
   return tostring(a.key or a.id)<tostring(b.key or b.id)
 end
-local ROWS_PER_PAGE = 7
+local MAX_ROWS,ROWS_PER_PAGE = 16,7
 
 local function copper(value)
   if value == nil then return "--" end
@@ -94,6 +107,7 @@ local function setSelected(item)
   selectedID = item and (item.key or item.id) or nil
   selectedItem=item
   if shoppingButton then shoppingButton:SetShown(item and (viewMode=='flips' or viewMode=='lookup') and item.cost~=nil) end
+  if auctionButton then auctionButton:SetShown(viewMode=='flips' and item and type(item.id)=='number' and type(item.ah)=='number' and item.ah>0 or false) end
   for i,row in ipairs(rows) do
     local active=row.item and selectedID and (row.item.key or row.item.id)==selectedID
     if active then row:SetBackdropColor(.18,.34,.26,1) else row:SetBackdropColor(i%2==0 and .10 or .075,.10,.11,.95) end
@@ -137,6 +151,7 @@ local function setSelected(item)
 end
 local function render()
   if not panel then return end
+  if detailTitle and detailBody then detailTitle:SetShown(#filtered==0);detailBody:SetShown(#filtered==0) end
   local maxOffset = math.max(0, #filtered - ROWS_PER_PAGE)
   scrollOffset = math.max(0, math.min(scrollOffset, maxOffset))
   if scrollbar then
@@ -148,17 +163,18 @@ local function render()
   end
   local found
   for i, row in ipairs(rows) do
-    local item = filtered[scrollOffset + i]
+    local item = i<=ROWS_PER_PAGE and filtered[scrollOffset + i] or nil
     row.item = item
     local active=item and selectedID and (item.key or item.id)==selectedID
     if active then row:SetBackdropColor(.18,.34,.26,1) else row:SetBackdropColor(i%2==0 and .10 or .075,.10,.11,.95) end
     if item then
+      row.icon:SetTexture(MarketeerForeverCore.MarketRowIcon(item.id))
       if viewMode=="flips" then
-        row.name:SetWidth(155);row.name:SetText(item.name)
+        row.name:SetWidth(270);row.name:SetText(item.name)
         local quantity=MarketeerForeverCore.OwnedItemQuantity and MarketeerForeverCore.OwnedItemQuantity(item.id)
         local display=quantity~=nil and ((BreakUpLargeNumbers and BreakUpLargeNumbers(quantity)) or tostring(quantity)) or "--"
         row.selling:SetText("|cff73e6a3"..display.." selling|r");row.selling:Show()
-      else row.name:SetWidth(245);row.name:SetText(item.name .. "  |cff829494#" .. item.id .. "|r");row.selling:Hide() end
+      else row.name:SetWidth(360);row.name:SetText(item.name .. "  |cff829494#" .. item.id .. "|r");row.selling:Hide() end
       row.gain:SetTextColor(.45,.9,.64)
       if viewMode == "resale" then
         row.vendor:SetText(item.checking and "Checking live prices..." or item.live and "Live profitable tiers checked" or item.checkError and "Live prices unavailable" or item.viewed and "Viewed; awaiting recheck" or "Awaiting live price check")
@@ -392,7 +408,7 @@ local function calculate()
         else
         local spend=packs*cost
         local quantity=variants[id]~=false and type(ah.quantity)=="number" and ah.quantity>=0 and ah.quantity or nil
-        local candidate={id=id,name=name,vendor=vendor,cost=cost,stack=stack,standing=standing,observed=observed,limited=limited,packs=packs,units=packs*stack,spend=spend,ah=ah.price,buyUnit=buyUnit,sellUnit=sellUnit,gainUnit=gainUnit,gainPack=gainPack,roi=gainUnit/buyUnit,quantity=quantity,remote=remote}
+        local candidate={id=id,name=name,vendor=vendor,cost=cost,stack=stack,standing=standing,observed=observed,limited=limited,packs=packs,units=packs*stack,spend=spend,ah=ah.price,buyUnit=buyUnit,sellUnit=sellUnit,gainUnit=gainUnit,gainPack=gainPack,roi=gainUnit/buyUnit,quantity=quantity,remote=remote,auctionKey={itemID=id,itemLevel=ah.itemLevel or 0,itemSuffix=ah.itemSuffix or 0,battlePetSpeciesID=ah.battlePetSpeciesID or 0}}
         if not best[id] or gainUnit>best[id].gainUnit then best[id]=candidate end
         end
         end
@@ -517,9 +533,9 @@ local function createPanel()
   minStackProfitBox=CreateFrame("EditBox",nil,panel,"InputBoxTemplate");minStackProfitBox:SetSize(48,20);minStackProfitBox:SetPoint("TOPLEFT",panel,"TOPLEFT",155,-74);minStackProfitBox:SetAutoFocus(false);minStackProfitBox:SetFontObject("GameFontHighlight");minStackProfitBox:SetText(tostring((MarketeerForeverMarketDB and MarketeerForeverMarketDB.flipMinPackProfitSilver) or 0));minStackProfitBox:SetScript("OnEnterPressed",function(self) self:ClearFocus();calculate() end);minStackProfitBox:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
   status=makeText(panel,nil,18,-101,690,"GameFontHighlightSmall");status:SetText("Waiting for auction data.")
   local header=CreateFrame("Frame",nil,panel,"BackdropTemplate");header:SetPoint("TOPLEFT",panel,"TOPLEFT",10,-122);header:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-10,-122);header:SetHeight(22);header:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});header:SetBackdropColor(0.13,0.18,0.17,1)
-  local cols={{"ITEM / VENDOR",8,245},{"BUY / UNIT",265,95},{"SELL / UNIT",370,95},{"GAIN / UNIT",475,95},{"GAIN / PACK",580,100},{"ACTIVITY",690,90},{"LISTED",790,75},{"GAP",875,90}}
+  local cols={{"ITEM / VENDOR",40,360},{"BUY / UNIT",412,95},{"SELL / UNIT",517,95},{"GAIN / UNIT",622,95},{"GAIN / PACK",727,100},{"ACTIVITY",837,90},{"LISTED",937,75},{"GAP",1022,90}}
   for i,c in ipairs(cols) do local t=makeText(header,nil,c[2],-5,c[3],"GameFontNormalSmall");t:SetText(c[1]);headerTexts[i]=t end
-  local gapHeader=CreateFrame("Button",nil,header);gapHeader:SetPoint("TOPLEFT",header,"TOPLEFT",875,0);gapHeader:SetSize(90,22)
+  local gapHeader=CreateFrame("Button",nil,header);gapHeader:SetPoint("TOPLEFT",header,"TOPLEFT",cols[8][2],0);gapHeader:SetSize(cols[8][3],22)
   gapHeader:SetScript("OnClick",function()
     if viewMode~="flips" and viewMode~="lookup" then return end
     if sortMode=="gap" then gapAscending=not gapAscending else sortMode="gap";gapAscending=false end
@@ -528,16 +544,18 @@ local function createPanel()
   gapHeader:SetScript("OnEnter",function(self) if viewMode=="flips" or viewMode=="lookup" then GameTooltip:SetOwner(self,"ANCHOR_TOP");GameTooltip:AddLine("Sort by gap");GameTooltip:AddLine("Estimated sales per day minus the quantity listed. Click again to reverse.",1,1,1,true);GameTooltip:Show() end end)
   gapHeader:SetScript("OnLeave",function() GameTooltip:Hide() end)
   rows={}
-  for i=1,ROWS_PER_PAGE do
+  for i=1,MAX_ROWS do
     local row=CreateFrame("Button",nil,panel,"BackdropTemplate");row:SetPoint("TOPLEFT",panel,"TOPLEFT",10,-145-(i-1)*34);row:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-32,-145-(i-1)*34);row:SetHeight(33);row:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});row:SetBackdropColor(i%2==0 and 0.10 or 0.075,0.10,0.11,0.95)
-    row.name=makeText(row,nil,8,-4,245,"GameFontHighlightSmall");row.vendor=makeText(row,nil,8,-19,245,"GameFontDisableSmall")
-    row.selling=makeText(row,nil,166,-4,88,"GameFontHighlightSmall");row.selling:SetJustifyH("RIGHT")
-    row.buy=makeText(row,nil,265,-11,95);row.ah=makeText(row,nil,370,-11,95);row.gain=makeText(row,nil,475,-11,95);row.gain:SetTextColor(0.45,0.9,0.64);row.stackGain=makeText(row,nil,580,-11,100);row.stackGain:SetTextColor(0.45,0.9,0.64);row.activity=makeText(row,nil,690,-11,90);row.listed=makeText(row,nil,790,-11,75);row.gap=makeText(row,nil,875,-11,90)
+    row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetSize(26,26);row.icon:SetPoint("LEFT",row,"LEFT",8,0)
+    row.name=makeText(row,nil,cols[1][2],-4,cols[1][3],"GameFontHighlightSmall");row.vendor=makeText(row,nil,cols[1][2],-19,cols[1][3],"GameFontDisableSmall")
+    row.selling=makeText(row,nil,cols[1][2]+273,-4,88,"GameFontHighlightSmall");row.selling:SetJustifyH("RIGHT")
+    row.buy=makeText(row,nil,cols[2][2],-11,cols[2][3]);row.ah=makeText(row,nil,cols[3][2],-11,cols[3][3]);row.gain=makeText(row,nil,cols[4][2],-11,cols[4][3]);row.gain:SetTextColor(0.45,0.9,0.64);row.stackGain=makeText(row,nil,cols[5][2],-11,cols[5][3]);row.stackGain:SetTextColor(0.45,0.9,0.64);row.activity=makeText(row,nil,cols[6][2],-11,cols[6][3]);row.listed=makeText(row,nil,cols[7][2],-11,cols[7][3]);row.gap=makeText(row,nil,cols[8][2],-11,cols[8][3])
     row.resaleView=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.resaleView:SetSize(52,22);row.resaleView:SetPoint("TOPRIGHT",row,"TOPRIGHT",-5,-5);row.resaleView:SetText("View");row.resaleView:Hide();row.resaleView:SetScript("OnClick",function() if row.item then openResale(row.item) end end)
+    row:SetScript("OnEnter",function(self)if self.item and self.name.IsTruncated and self.name:IsTruncated() and GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(self.item.name);GameTooltip:Show() end end);row:SetScript("OnLeave",function()if GameTooltip then GameTooltip:Hide() end end)
     row:SetScript("OnClick",function(self,button) if self.item then if (not button or button=="LeftButton") and IsAltKeyDown and IsAltKeyDown() and MarketeerForeverCore.ShowMarketHistory then MarketeerForeverCore.ShowMarketHistory(self.item.id) else setSelected(self.item) end end end);rows[i]=row
   end
   scrollbar=CreateFrame("Slider","MarketeerForeverMarketResultsScrollBar",panel,"UIPanelScrollBarTemplate")
-  scrollbar:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-14,-161);scrollbar:SetSize(16,195)
+  scrollbar:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-14,-161);scrollbar:SetPoint("BOTTOMRIGHT",panel,"BOTTOMRIGHT",-14,82);scrollbar:SetWidth(16)
   scrollbar:SetMinMaxValues(0,0);scrollbar:SetValueStep(1)
   if scrollbar.SetObeyStepOnDrag then scrollbar:SetObeyStepOnDrag(true) end
   scrollbar:SetScript("OnValueChanged",function(_,value)
@@ -553,18 +571,26 @@ local function createPanel()
   panel:EnableMouseWheel(true);panel:SetScript("OnMouseWheel",onWheel)
   for _,row in ipairs(rows) do row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",onWheel) end
   scrollbar:EnableMouseWheel(true);scrollbar:SetScript("OnMouseWheel",onWheel)
-  pageText=makeText(panel,nil,18,-391,450,"GameFontHighlightSmall")
-  detailTitle=makeText(panel,nil,18,-416,850,"GameFontNormalSmall")
-  detailBody=makeText(panel,nil,18,-432,850,"GameFontHighlightSmall");detailBody:SetWordWrap(true)
+  pageText=makeText(panel,nil,18,0,450,"GameFontHighlightSmall");pageText:ClearAllPoints();pageText:SetPoint("BOTTOMLEFT",panel,"BOTTOMLEFT",18,52)
+  detailTitle=makeText(panel,nil,18,-160,850,"GameFontNormalSmall");detailTitle:Hide()
+  detailBody=makeText(panel,nil,18,-183,850,"GameFontHighlightSmall");detailBody:SetWordWrap(true);detailBody:Hide()
+  local function layoutRows()
+    local height=panel:GetHeight();if not height or height<=0 then return end
+    local count=math.max(1,math.min(MAX_ROWS,math.floor((height-225)/34)))
+    if count~=ROWS_PER_PAGE then ROWS_PER_PAGE=count;render() end
+  end
+  panel:SetScript("OnSizeChanged",layoutRows)
   wowheadButton=CreateFrame('Button',nil,panel,'UIPanelButtonTemplate');wowheadButton:SetSize(120,23);wowheadButton:SetPoint('BOTTOMRIGHT',panel,'BOTTOMRIGHT',-20,18);wowheadButton:SetText('Wowhead link');wowheadButton:Hide()
   wowheadButton:SetScript('OnClick',function()if selectedItem then MarketeerForeverCore.ShowWowheadLink(selectedItem.id) end end)
   shoppingButton=CreateFrame('Button',nil,panel,'UIPanelButtonTemplate');shoppingButton:SetSize(150,23);shoppingButton:SetPoint('RIGHT',wowheadButton,'LEFT',-8,0);shoppingButton:SetText('Add to shopping list');shoppingButton:Hide()
   shoppingButton:SetScript('OnClick',function()if selectedItem and MarketeerForeverCore.AddShoppingVendor then MarketeerForeverCore.AddShoppingVendor(selectedItem) end end)
-  resaleCheckButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");resaleCheckButton:SetSize(105,22);resaleCheckButton:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-115,-411);resaleCheckButton:SetText("Recheck")
+  auctionButton=CreateFrame('Button',nil,panel,'UIPanelButtonTemplate');auctionButton:SetSize(120,23);auctionButton:SetPoint('RIGHT',shoppingButton,'LEFT',-8,0);auctionButton:SetText('Open auctions');auctionButton:Hide()
+  auctionButton:SetScript('OnClick',function()if selectedItem and MarketeerForeverCore.OpenAuctionListings then MarketeerForeverCore.OpenAuctionListings(selectedItem.id,selectedItem.ah,selectedItem.auctionKey) end end)
+  resaleCheckButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");resaleCheckButton:SetSize(105,22);resaleCheckButton:SetPoint("BOTTOMLEFT",panel,"BOTTOMLEFT",18,18);resaleCheckButton:SetText("Recheck")
   resaleCheckButton:SetScript("OnClick",function()
     if viewMode=="resale" then checkResaleItem(selectedItem) end
   end)
-  resaleViewButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");resaleViewButton:SetSize(80,22);resaleViewButton:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-25,-411);resaleViewButton:SetText("View")
+  resaleViewButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");resaleViewButton:SetSize(80,22);resaleViewButton:SetPoint("LEFT",resaleCheckButton,"RIGHT",8,0);resaleViewButton:SetText("View")
   resaleViewButton:SetScript("OnClick",function()
     openResale(selectedItem)
   end)
@@ -573,6 +599,12 @@ local function createPanel()
   knownButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");knownButton:SetSize(125,22);knownButton:SetPoint("TOPLEFT",panel,"TOPLEFT",335,-77)
   knownButton:SetScript("OnClick",function() MarketeerForeverMarketDB.craftKnownOnly=not MarketeerForeverMarketDB.craftKnownOnly;knownButton:SetText(MarketeerForeverMarketDB.craftKnownOnly and "Known only" or "All recipes");calculate() end)
   captureButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");captureButton:SetSize(110,22);captureButton:SetPoint("TOPLEFT",panel,"TOPLEFT",590,-77);captureButton:SetText("Capture recipes");captureButton:SetScript("OnClick",function() if MarketeerForeverMarketCaptureRecipes then MarketeerForeverMarketCaptureRecipes();calculate() end end)
+  captureButton:SetScript("OnEnter",function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self,"ANCHOR_TOP");GameTooltip:SetText("Capture recipes")
+    GameTooltip:AddLine("Open a profession window, then click this button to capture or update its recipes. Repeat for each profession.",1,1,1,true);GameTooltip:Show()
+  end)
+  captureButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
   local importButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");importButton:SetSize(115,22);importButton:SetPoint("TOPLEFT",panel,"TOPLEFT",845,-77);importButton:SetText("Import data");importButton:SetScript("OnClick",function() MarketeerForeverCore.ShowImport() end)
   local applyButton=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");applyButton:SetSize(110,22);applyButton:SetPoint("TOPLEFT",panel,"TOPLEFT",470,-77);applyButton:SetText("Apply / Search");applyButton:SetScript("OnClick",function() scrollOffset=0;calculate() end)
   applyMode=function(preserveResale)
@@ -610,7 +642,7 @@ local function createPanel()
   end)
   applyMode()
   panel:SetScript("OnShow",function()
-    updateControls()
+    layoutRows();updateControls()
     if skipNextMarketRefresh or (viewMode=="resale" and resaleCache) then skipNextMarketRefresh=false;render() else calculate() end
   end);panel:Hide()
   return panel
@@ -660,7 +692,7 @@ local function registerTab()
     host:SetScript("OnShow",function(self)
       if not previousWidth then
         previousWidth,previousHeight=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight()
-        AuctionHouseFrame:SetSize(previousWidth+220,previousHeight+160)
+        AuctionHouseFrame:SetSize(previousWidth+(MarketeerForeverCore.AuctionPanelExtraWidth or 367),previousHeight+160)
       end
       frame:Hide();frame:SetParent(self);frame:ClearAllPoints();frame:SetAllPoints(self)
       local preserve=mode=="flips" and marketViewMode=="resale" and resaleCache~=nil
@@ -687,8 +719,14 @@ local events=CreateFrame("Frame")
 events:RegisterEvent("AUCTION_HOUSE_SHOW")
 events:RegisterEvent("AUCTION_HOUSE_CLOSED")
 events:RegisterEvent("ITEM_KEY_ITEM_INFO_RECEIVED")
-events:SetScript("OnEvent",function(_,event,id)
+events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+events:SetScript("OnEvent",function(_,event,id,success)
   if event=="AUCTION_HOUSE_CLOSED" then returningFromResaleView=false;resaleReturnItem=nil;skipNextMarketRefresh=false;resaleOpenRequest=nil;resaleCache=nil;resaleEpoch=resaleEpoch+1;MarketeerForeverCore.SetWorking("resaleView",false)
+  elseif event=="GET_ITEM_INFO_RECEIVED" then
+    if not success or type(id)~="number" then return end
+    requestedRowIcons[id]=nil
+    if panel and panel:IsShown() then for _,row in ipairs(rows) do if row.item and row.item.id==id then row.icon:SetTexture(MarketeerForeverCore.MarketRowIcon(id)) end end end
+    if MarketeerForeverCraftIconLoaded then MarketeerForeverCraftIconLoaded(id) end
   elseif event=="ITEM_KEY_ITEM_INFO_RECEIVED" then if resaleOpenRequest and resaleOpenRequest.item.id==id and resaleVisible() then tryOpenResale() end
   elseif C_Timer and C_Timer.After then C_Timer.After(0.5,registerTab) else registerTab() end
 end)

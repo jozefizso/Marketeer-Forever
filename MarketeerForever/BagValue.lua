@@ -107,7 +107,8 @@ local function setupValueButton()
   valueButton=CreateFrame("Button","MarketeerForeverBagValueButton",UIParent,"BackdropTemplate")
   valueButton:SetSize(24,24)
   local pos=MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagValueButtonPosition
-  if pos and type(pos.x)=="number" and type(pos.y)=="number" then valueButton:SetPoint("BOTTOMLEFT",UIParent,"BOTTOMLEFT",pos.x,pos.y)
+  if pos and pos.centered then valueButton:SetPoint("CENTER",UIParent,"CENTER",0,0)
+  elseif pos and type(pos.x)=="number" and type(pos.y)=="number" then valueButton:SetPoint("BOTTOMLEFT",UIParent,"BOTTOMLEFT",pos.x,pos.y)
   else valueButton:SetPoint("BOTTOMLEFT",ChatFrame1,"TOPRIGHT",6,-24) end
   valueButton:SetMovable(true);valueButton:SetClampedToScreen(true);valueButton:RegisterForDrag("LeftButton")
   valueButton:SetScript("OnMouseDown",function(self) self.wasDragged=false end)
@@ -163,6 +164,10 @@ function core.ResetBagPosition()
   end
   local ok=pcall(function()bags:ClearAllPoints();bags:SetPoint('BOTTOMRIGHT',UIParent,'BOTTOMRIGHT',-50,100)end)
   print(ok and 'Marketeer: bag position reset.' or 'Marketeer: saved bag position cleared. Close and reopen your bags.')
+end
+function core.ResetBagCoinPosition()
+  if MarketeerForeverCoreDB then MarketeerForeverCoreDB.bagValueButtonPosition={centered=true} end
+  if valueButton then valueButton:ClearAllPoints();valueButton:SetPoint("CENTER",UIParent,"CENTER",0,0) end
 end
 local function setup()
   local bags=_G.ContainerFrameCombinedBags

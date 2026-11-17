@@ -93,7 +93,7 @@ local function createPanel()
   local older=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");older:SetSize(80,22);older:SetPoint("BOTTOMLEFT",panel,"BOTTOMLEFT",16,15);older:SetText("Older");older:SetScript("OnClick",function() offset=offset+pageSize;render() end)
   local newer=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate");newer:SetSize(80,22);newer:SetPoint("LEFT",older,"RIGHT",8,0);newer:SetText("Newer");newer:SetScript("OnClick",function() offset=math.max(0,offset-pageSize);render() end)
   local oldWidth,oldHeight
-  panel:SetScript("OnShow",function() if not oldWidth then oldWidth,oldHeight=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(oldWidth+220,oldHeight+160) end;render() end)
+  panel:SetScript("OnShow",function() if not oldWidth then oldWidth,oldHeight=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(oldWidth+(MarketeerForeverCore.AuctionPanelExtraWidth or 367),oldHeight+160) end;render() end)
   panel:SetScript("OnHide",function() if oldWidth then AuctionHouseFrame:SetSize(oldWidth,oldHeight);oldWidth=nil;oldHeight=nil end end)
   MarketeerForeverTabs:CreateTab("MarketeerForeverPurchaseHistory",panel,"Purchases");render()
 end

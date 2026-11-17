@@ -1,7 +1,7 @@
 -- A session shopping list: craft counts mean crafts, independent of output yield.
 local core=MarketeerForeverCore
 local recipes,vendors={},{}
-local frame,content,scroll
+local frame,content,scroll,totalLabel
 local render,rendering
 local importDialog
 local opening,pendingQuantity
@@ -59,6 +59,36 @@ local function openMaterial(id,needed)
   if not ok then opening=nil;print('Marketeer: '..tostring(err or 'Could not search auctions.')) elseif opening==request then print('Marketeer: checking live auction listings...') end
 end
 core.OpenShoppingMaterial=openMaterial
+-- Open the native buy view for a scanned item, including your own listings.
+function core.OpenAuctionListings(id,price,auctionKey)
+  if type(id)~='number' or id<=0 or type(price)~='number' or price<=0 then print('Marketeer: no scanned price is available for this item.');return false end
+  if not auctionOpen() then print('Marketeer: open the auction house first.');return false end
+  if core.phase~='idle' or (core.working and core.working.buyout) or (core.IsCompetitionSearchActive and core.IsCompetitionSearchActive()) then print('Marketeer: wait for the auction scan or price check to finish.');return false end
+  if not C_AuctionHouse or not C_AuctionHouse.MakeItemKey or not C_AuctionHouse.GetItemKeyInfo or not AuctionHouseFrame.SelectBrowseResult then print('Marketeer: auction search is unavailable.');return false end
+  if C_AuctionHouse.IsThrottledMessageSystemReady and not C_AuctionHouse.IsThrottledMessageSystemReady() then print('Marketeer: the auction house is busy; try again shortly.');return false end
+  local key=type(auctionKey)=='table' and auctionKey.itemID==id and auctionKey or nil
+  if not key and core.Market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices then
+    local market=core.Market();local book=market and MarketeerForeverCoreDB.prices[market];local row=book and book.items and book.items[id]
+    local level,suffix,pet;if type(row)=='table' and not row.carried and type(row.variant)=='string' then level,suffix,pet=row.variant:match('^(%d+):(%-?%d+):(%d+)$') end
+    if level then key={itemID=id,itemLevel=tonumber(level),itemSuffix=tonumber(suffix),battlePetSpeciesID=tonumber(pet)} end
+  end
+  if not key then local ok;ok,key=pcall(C_AuctionHouse.MakeItemKey,id);if not ok or not key then print('Marketeer: item details are unavailable.');return false end end
+  local valid,info=pcall(C_AuctionHouse.GetItemKeyInfo,key)
+  if not valid or type(info)~='table' or type(info.isCommodity)~='boolean' then
+    if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID,id) end
+    print('Marketeer: item details are loading; try Open auctions again.');return false
+  end
+  pendingQuantity=nil
+  if MarketeerForeverTabs and MarketeerForeverTabs.HideAll then MarketeerForeverTabs:HideAll() end
+  local opened,err=pcall(AuctionHouseFrame.SelectBrowseResult,AuctionHouseFrame,{itemKey=key,minPrice=price})
+  if not opened then print('Marketeer: could not open auctions: '..tostring(err));return false end
+  local context=AuctionHouseSearchContext and (info.isCommodity and AuctionHouseSearchContext.BuyCommodities or AuctionHouseSearchContext.BuyItems)
+  if context and AuctionHouseFrame.QueryItem then
+    local queried=pcall(AuctionHouseFrame.QueryItem,AuctionHouseFrame,context,key)
+    if not queried then print('Marketeer: live listings could not be refreshed; use the auction search to retry.') end
+  end
+  return true
+end
 local function applyQuantity()
   local request=pendingQuantity;if not request or not auctionOpen() then return end
   local buy=AuctionHouseFrame.CommoditiesBuyFrame
@@ -112,13 +142,14 @@ local function button(parent,text,w,fn)
 end
 local function create()
   if frame then return end
-  frame=CreateFrame('Frame','MarketeerShoppingList',UIParent,'BackdropTemplate');frame:SetSize(560,420);frame:SetPoint('CENTER',UIParent,'CENTER',260,0);frame:SetFrameStrata('DIALOG');frame:SetMovable(true);frame:SetResizable(true);frame:SetClampedToScreen(true);frame:EnableMouse(true)
-  if frame.SetResizeBounds then frame:SetResizeBounds(500,260,800,900) elseif frame.SetMinResize then frame:SetMinResize(500,260) end
+  frame=CreateFrame('Frame','MarketeerShoppingList',UIParent,'BackdropTemplate');frame:SetSize(660,420);frame:SetPoint('CENTER',UIParent,'CENTER',260,0);frame:SetFrameStrata('DIALOG');frame:SetMovable(true);frame:SetResizable(true);frame:SetClampedToScreen(true);frame:EnableMouse(true)
+  if frame.SetResizeBounds then frame:SetResizeBounds(600,260,900,900) elseif frame.SetMinResize then frame:SetMinResize(600,260) end
   frame:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});frame:SetBackdropColor(.055,.075,.065,.98);frame:SetBackdropBorderColor(.25,.48,.34,1)
-  local bar=CreateFrame('Frame',nil,frame);bar:SetPoint('TOPLEFT');bar:SetPoint('TOPRIGHT');bar:SetHeight(38);bar:EnableMouse(true);bar:RegisterForDrag('LeftButton');bar:SetScript('OnDragStart',function()frame:StartMoving()end);bar:SetScript('OnDragStop',function()frame:StopMovingOrSizing()end)
+  local bar=CreateFrame('Frame',nil,frame);bar:SetPoint('TOPLEFT');bar:SetPoint('TOPRIGHT');bar:SetHeight(62);bar:EnableMouse(true);bar:RegisterForDrag('LeftButton');bar:SetScript('OnDragStart',function()frame:StartMoving()end);bar:SetScript('OnDragStop',function()frame:StopMovingOrSizing()end)
   label(bar,14,-12,280,'GameFontNormal'):SetText('SHOPPING LIST')
+  totalLabel=label(bar,14,-36,520,'GameFontHighlightSmall');totalLabel:SetText('To buy (scan): --')
   local close=button(bar,'X',28,function()frame:Hide()end);close:SetPoint('TOPRIGHT',-8,-8)
-  scroll=CreateFrame('ScrollFrame',nil,frame,'UIPanelScrollFrameTemplate');scroll:SetPoint('TOPLEFT',12,-42);scroll:SetPoint('BOTTOMRIGHT',-30,42)
+  scroll=CreateFrame('ScrollFrame',nil,frame,'UIPanelScrollFrameTemplate');scroll:SetPoint('TOPLEFT',12,-65);scroll:SetPoint('BOTTOMRIGHT',-30,42)
   content=CreateFrame('Frame',nil,scroll);content:SetSize(360,1);scroll:SetScrollChild(content)
   local clear=button(frame,'Clear list',85,function()recipes={};vendors={};render()end);clear:SetPoint('BOTTOMLEFT',12,10)
   local import=button(frame,'Import',85,function()importDialog:Show() end);import:SetPoint('BOTTOMLEFT',105,10)
@@ -158,9 +189,16 @@ render=function()
   if not content or rendering then return end
   rendering=true
   for _,row in ipairs(widgets) do row:Hide();for _,v in ipairs(row.labels or {}) do v:Hide() end;for _,v in ipairs(row.buttons or {}) do v:Hide() end;if row.edit then row.edit:Hide() end end;used=0
-  local width=math.max(452,(frame:GetWidth() or 560)-48);content:SetWidth(width);local y=0
-  local columns={name={x=8,width=width-290},price={x=width-278,width=80},progress={x=width-195,width=105}}
-  local materials={};local carried=bagCounts()
+  local width=math.max(552,(frame:GetWidth() or 660)-48);content:SetWidth(width);local y=0
+  local columns={name={x=8,width=width-380},price={x=width-365,width=80},total={x=width-282,width=85},progress={x=width-195,width=105}}
+  local materials={};local carried=bagCounts();local totalCost,unpriced=0,0
+  local function estimate(id,quantity)
+    if not carried or not id then unpriced=unpriced+1;return nil end
+    local missing=math.max(0,quantity-(carried[id] or 0))
+    if missing==0 then return 0 end
+    local unit=scanPrice(id);if not unit then unpriced=unpriced+1;return nil end
+    local cost=unit*missing;totalCost=totalCost+cost;return cost
+  end
   if #recipes>0 then local r=line('heading',y,width);label(r,2,-4,width,'GameFontNormalSmall'):SetText('RECIPES  |  CRAFTS');y=y+25 end
   for i,recipe in ipairs(recipes) do
     local row=line('recipe',y,width);label(row,2,-4,width-150):SetText(recipe.name)
@@ -177,10 +215,11 @@ render=function()
     y=y+27
   end
   local all={};for _,m in pairs(materials) do all[#all+1]=m end;table.sort(all,function(a,b)return a.name:lower()<b.name:lower()end)
-  if #all>0 then local r=line('heading',y,width);label(r,columns.name.x,-4,columns.name.width,'GameFontNormalSmall'):SetText('MATERIALS NEEDED');local price=label(r,columns.price.x,-4,columns.price.width,'GameFontNormalSmall');price:SetJustifyH('RIGHT');price:SetText('AH / UNIT');local h=label(r,columns.progress.x,-4,columns.progress.width,'GameFontNormalSmall');h:SetJustifyH('RIGHT');h:SetText('IN BAGS / NEED');y=y+24 end
+  if #all>0 then local r=line('heading',y,width);label(r,columns.name.x,-4,columns.name.width,'GameFontNormalSmall'):SetText('MATERIALS NEEDED');local price=label(r,columns.price.x,-4,columns.price.width,'GameFontNormalSmall');price:SetJustifyH('RIGHT');price:SetText('AH / UNIT');local total=label(r,columns.total.x,-4,columns.total.width,'GameFontNormalSmall');total:SetJustifyH('RIGHT');total:SetText('TO BUY');local h=label(r,columns.progress.x,-4,columns.progress.width,'GameFontNormalSmall');h:SetJustifyH('RIGHT');h:SetText('IN BAGS / NEED');y=y+24 end
   for _,m in ipairs(all) do
     local r=line('material',y,width);label(r,columns.name.x,-4,columns.name.width):SetText(m.id and itemName(m.id,m.name) or (m.name..' (unresolved)'))
     local unit=label(r,columns.price.x,-4,columns.price.width);unit:SetJustifyH('RIGHT');unit:SetText(priceText(scanPrice(m.id)))
+    local total=label(r,columns.total.x,-4,columns.total.width);total:SetJustifyH('RIGHT');total:SetText(priceText(estimate(m.id,m.quantity)))
     local have=m.id and carried and (carried[m.id] or 0);local progress=label(r,columns.progress.x,-4,columns.progress.width);progress:SetJustifyH('RIGHT')
     if have and have>=m.quantity then progress:SetText('|cff73e6a3[OK] '..have..' / '..m.quantity..'|r') else progress:SetText((have and tostring(have) or '--')..' / '..m.quantity) end
     if m.id and auctionOpen() then local buy=button(r,'Open',50,function()local counts=bagCounts();if not counts then print('Marketeer: bag quantities are unavailable; try again.');return end;local missing=math.max(0,m.quantity-(counts[m.id] or 0));if missing>0 then openMaterial(m.id,missing) else print('Marketeer: you already have the required amount in your bags.') end end);buy:SetPoint('TOPRIGHT',-28,0);buy:SetEnabled(have~=nil and have<m.quantity) end
@@ -199,9 +238,10 @@ render=function()
     end
     y=y+22
   end
-  if #vendors>0 then local r=line('heading',y,width);label(r,columns.name.x,-4,columns.name.width,'GameFontNormalSmall'):SetText('VENDOR ITEMS');local price=label(r,columns.price.x,-4,columns.price.width,'GameFontNormalSmall');price:SetJustifyH('RIGHT');price:SetText('AH / UNIT');y=y+24 end
-  for i,item in ipairs(vendors) do local r=line('vendor',y,width);label(r,columns.name.x,-4,columns.name.width):SetText(item.name);local unit=label(r,columns.price.x,-4,columns.price.width);unit:SetJustifyH('RIGHT');unit:SetText(priceText(scanPrice(item.id)));local have=carried and (carried[item.id] or 0);local state=label(r,columns.progress.x,-4,columns.progress.width);state:SetJustifyH('RIGHT');state:SetText(have==nil and '--' or have>0 and '|cff73e6a3[OK]|r' or 'Needed');local remove=button(r,'X',24,function()table.remove(vendors,i);render()end);remove:SetPoint('TOPRIGHT',0,0);y=y+25 end
+  if #vendors>0 then local r=line('heading',y,width);label(r,columns.name.x,-4,columns.name.width,'GameFontNormalSmall'):SetText('VENDOR ITEMS');local price=label(r,columns.price.x,-4,columns.price.width,'GameFontNormalSmall');price:SetJustifyH('RIGHT');price:SetText('AH / UNIT');local total=label(r,columns.total.x,-4,columns.total.width,'GameFontNormalSmall');total:SetJustifyH('RIGHT');total:SetText('TO BUY');y=y+24 end
+  for i,item in ipairs(vendors) do local r=line('vendor',y,width);label(r,columns.name.x,-4,columns.name.width):SetText(item.name);local unit=label(r,columns.price.x,-4,columns.price.width);unit:SetJustifyH('RIGHT');unit:SetText(priceText(scanPrice(item.id)));local total=label(r,columns.total.x,-4,columns.total.width);total:SetJustifyH('RIGHT');total:SetText(priceText(estimate(item.id,1)));local have=carried and (carried[item.id] or 0);local state=label(r,columns.progress.x,-4,columns.progress.width);state:SetJustifyH('RIGHT');state:SetText(have==nil and '--' or have>0 and '|cff73e6a3[OK]|r' or 'Needed');local remove=button(r,'X',24,function()table.remove(vendors,i);render()end);remove:SetPoint('TOPRIGHT',0,0);y=y+25 end
   if #recipes==0 and #vendors==0 then local r=line('empty',y,width);label(r,2,-4,width):SetText('Add a recipe or vendor item to get started.');y=y+25 end
+  totalLabel:SetText('To buy (latest scan): '..(unpriced>0 and ('at least '..priceText(totalCost)..' | '..unpriced..' unavailable') or priceText(totalCost)))
   content:SetHeight(math.max(1,y+5))
   rendering=false
 end

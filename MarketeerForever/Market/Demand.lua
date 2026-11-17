@@ -202,7 +202,7 @@ local function build()
   local function wheel(_,delta) offset=math.max(0,math.min(math.max(0,#filtered-pageSize),offset-delta));render() end
   panel:EnableMouseWheel(true);panel:SetScript("OnMouseWheel",wheel);for _,row in ipairs(rows) do row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",wheel) end
   local width,height
-  panel:SetScript("OnShow",function() if not width then width,height=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(width+220,height+365) end;refresh() end)
+  panel:SetScript("OnShow",function() if not width then width,height=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(width+(MarketeerForeverCore.AuctionPanelExtraWidth or 367),height+365) end;refresh() end)
   panel:SetScript("OnHide",function() if width then AuctionHouseFrame:SetSize(width,height);width=nil;height=nil end end)
   MarketeerForeverTabs:CreateTab("MarketeerForeverDemand",panel,"Demand")
 end
