@@ -31,8 +31,8 @@ end
 local function auctionOpen()
   return core.active and AuctionHouseFrame and AuctionHouseFrame.IsShown and AuctionHouseFrame:IsShown()
 end
-local function openMaterial(id,needed)
-  if type(id)~='number' or id<=0 or type(needed)~='number' or needed<=0 then return end
+local function openMaterial(id,needed,listingOnly)
+  if type(id)~='number' or id<=0 or (not listingOnly and (type(needed)~='number' or needed<=0)) then return end
   if not auctionOpen() then print('Marketeer: open the auction house first.');return end
   if opening then print('Marketeer: the previous material is still loading.');return end
   if core.phase~='idle' or (core.IsCompetitionSearchActive and core.IsCompetitionSearchActive()) then print('Marketeer: wait for the auction scan to finish, then try again.');return end
@@ -48,7 +48,10 @@ local function openMaterial(id,needed)
     if MarketeerForeverTabs and MarketeerForeverTabs.HideAll then MarketeerForeverTabs:HideAll() end
     local opened,why=pcall(AuctionHouseFrame.SelectBrowseResult,AuctionHouseFrame,{itemKey=key,minPrice=result.tiers[1].price})
     if not opened then print('Marketeer: could not open this item: '..tostring(why));return end
-    if info.isCommodity then
+    if listingOnly then
+      local context=AuctionHouseSearchContext and (info.isCommodity and AuctionHouseSearchContext.BuyCommodities or AuctionHouseSearchContext.BuyItems)
+      if context and AuctionHouseFrame.QueryItem then pcall(AuctionHouseFrame.QueryItem,AuctionHouseFrame,context,key) end
+    elseif info.isCommodity then
       pendingQuantity={id=id,quantity=needed,delay=.25,elapsed=0}
       if AuctionHouseFrame.QueryItem and AuctionHouseSearchContext and AuctionHouseSearchContext.BuyCommodities then
         local sent=pcall(AuctionHouseFrame.QueryItem,AuctionHouseFrame,AuctionHouseSearchContext.BuyCommodities,key)
@@ -88,6 +91,16 @@ function core.OpenAuctionListings(id,price,auctionKey)
     if not queried then print('Marketeer: live listings could not be refreshed; use the auction search to retry.') end
   end
   return true
+end
+function core.OpenItemAuctions(id)
+  local market=core.Market and core.Market()
+  local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
+  local row=book and book.items and book.items[id]
+  if type(row)=='table' and not row.carried and type(row.price)=='number' and row.price>0 then
+    core.OpenAuctionListings(id,row.price)
+  else
+    openMaterial(id,nil,true)
+  end
 end
 local function applyQuantity()
   local request=pendingQuantity;if not request or not auctionOpen() then return end

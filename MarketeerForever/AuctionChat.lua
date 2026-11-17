@@ -117,13 +117,46 @@ local function formatted(notification,arg)
   local formatString=notification==e.AuctionSold and ERR_AUCTION_SOLD_S or notification==e.AuctionWon and ERR_AUCTION_WON_S or notification==e.AuctionOutbid and ERR_AUCTION_OUTBID_S or notification==e.AuctionExpired and ERR_AUCTION_EXPIRED_S or notification==e.BidPlaced and ERR_AUCTION_BID_PLACED or notification==e.AuctionRemoved and ERR_AUCTION_REMOVED
   if type(formatString)=='string' then local ok,text=pcall(string.format,formatString,arg or '');if ok then return text end end
 end
+-- Crafting results use CHAT_MSG_LOOT too; do not mistake them for mail.
+local function isCraftedLoot(message)
+  if type(message)~='string' or (issecretvalue and issecretvalue(message)) then return false end
+  for _,key in ipairs({'LOOT_ITEM_CREATED_SELF','LOOT_ITEM_CREATED_SELF_MULTIPLE','LOOT_ITEM_CREATED_SELF_BONUS_ROLL'}) do
+    local formatString=_G[key]
+    if type(formatString)=='string' then
+      local prefix=formatString:match('^(.-)%%[%d%$]*[sd]')
+      if prefix and prefix~='' and message:sub(1,#prefix)==prefix then return true end
+    end
+  end
+  return false
+end
 local mailboxOpen=false
+local mailboxMoney
+local pendingMoney={}
+local function moneyBalance()
+  if type(GetMoney)~='function' then return nil end
+  local ok,value=pcall(GetMoney)
+  if ok and not (issecretvalue and issecretvalue(value)) and type(value)=='number' then return value end
+end
+local function reportMailboxGain(amount)
+  local formatted=GetCoinTextureString and GetCoinTextureString(amount) or (GetMoneyString and GetMoneyString(amount)) or (tostring(amount)..' copper')
+  deliver('You gained: '..formatted,'mail','MONEY')
+end
 local listener=CreateFrame('Frame')
-for _,event in ipairs({'ADDON_LOADED','PLAYER_LOGIN','AUCTION_HOUSE_SHOW_NOTIFICATION','AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION','AUCTION_HOUSE_SHOW_COMMODITY_WON_NOTIFICATION','MAIL_SHOW','MAIL_CLOSED','CHAT_MSG_LOOT','CHAT_MSG_MONEY'}) do pcall(listener.RegisterEvent,listener,event) end
+for _,event in ipairs({'ADDON_LOADED','PLAYER_LOGIN','AUCTION_HOUSE_SHOW_NOTIFICATION','AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION','AUCTION_HOUSE_SHOW_COMMODITY_WON_NOTIFICATION','MAIL_SHOW','MAIL_CLOSED','PLAYER_MONEY','CHAT_MSG_LOOT','CHAT_MSG_MONEY'}) do pcall(listener.RegisterEvent,listener,event) end
 listener:SetScript('OnEvent',function(_,event,a,b)
-  if event=='MAIL_SHOW' then mailboxOpen=true
-  elseif event=='MAIL_CLOSED' then mailboxOpen=false
-  elseif mailboxOpen and (event=='CHAT_MSG_LOOT' or event=='CHAT_MSG_MONEY') then deliver(a,'mail',event=='CHAT_MSG_LOOT' and 'LOOT' or 'MONEY')
+  if event=='MAIL_SHOW' then mailboxOpen=true;mailboxMoney=moneyBalance()
+  elseif event=='MAIL_CLOSED' then mailboxOpen=false;mailboxMoney=nil
+  elseif event=='PLAYER_MONEY' and mailboxOpen then
+    local balance=moneyBalance();local gain=balance and mailboxMoney and balance-mailboxMoney
+    mailboxMoney=balance
+    if gain and gain>0 then
+      local pending={amount=gain};pendingMoney[#pendingMoney+1]=pending
+      local function report() for i,entry in ipairs(pendingMoney) do if entry==pending then table.remove(pendingMoney,i);reportMailboxGain(pending.amount);return end end end
+      if C_Timer and C_Timer.After then C_Timer.After(.5,report) else report() end
+    end
+  elseif mailboxOpen and (event=='CHAT_MSG_LOOT' or event=='CHAT_MSG_MONEY') then
+    if event=='CHAT_MSG_MONEY' and #pendingMoney>0 then table.remove(pendingMoney,1) end
+    if event~='CHAT_MSG_LOOT' or not isCraftedLoot(a) then deliver(a,'mail',event=='CHAT_MSG_LOOT' and 'LOOT' or 'MONEY') end
   elseif event=='ADDON_LOADED' or event=='PLAYER_LOGIN' then installSetting()
   elseif event=='AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION' then deliver(formatted(a,b))
   elseif event=='AUCTION_HOUSE_SHOW_NOTIFICATION' then deliver(formatted(a))

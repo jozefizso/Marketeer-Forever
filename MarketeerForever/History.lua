@@ -83,12 +83,14 @@ function core.CreateHistoryPanel(parent)
   for _,b in ipairs({previous,nextPage}) do b:EnableMouseWheel(true);b:SetScript('OnMouseWheel',wheelResults) end
   local recipeButton=button(p,'Recipe',428,-158,75,function()if itemId and core.ShowItemRecipes then core.ShowItemRecipes(itemId) end end)
   local lootButton=button(p,'Monster loot',508,-158,96,function()if itemId and core.ShowItemDrops then core.ShowItemDrops(itemId) end end)
-  recipeButton:Hide();lootButton:Hide()
+  local auctionButton=button(p,'Open auctions',432,-241,110,function()if itemId and core.OpenItemAuctions then core.OpenItemAuctions(itemId) end end)
+  recipeButton:Hide();lootButton:Hide();auctionButton:Hide()
   local function updateItemLinks()
     local lookup=_G.MarketeerForeverFarmLookup
     local entry=itemId and type(lookup)=='table' and type(lookup.items)=='table' and lookup.items[itemId]
     recipeButton:SetShown(itemId and core.HasItemRecipe and core.HasItemRecipe(itemId) or false)
     lootButton:SetShown(entry and type(entry.drops)=='table' and #entry.drops>0 or false)
+    auctionButton:SetShown(itemId and core.active and AuctionHouseFrame and AuctionHouseFrame:IsShown() and core.OpenItemAuctions~=nil or false)
   end
   local function clearGraph()
     for _,line in pairs(lines) do line:Hide() end;for _,dot in ipairs(dots) do dot:Hide() end
@@ -221,6 +223,10 @@ function core.CreateHistoryPanel(parent)
   function p:SetItem(id) itemId=tonumber(id);if itemId then searchSerial=searchSerial+1;searchJob=nil;pendingChoose=false;resultPanel:Hide();suppressSearch=true;input:SetText(itemNameFor(itemId) or tostring(itemId));suppressSearch=false;selectRange('all') end end
   function p:Refresh() if itemId then draw() end end
   chart:SetScript('OnSizeChanged',function() if itemId then draw() end end)
-  p:RegisterEvent('GET_ITEM_INFO_RECEIVED');p:SetScript('OnEvent',function(_,_,id,success)if success and id==itemId and p:IsShown() then draw() end end)
+  for _,event in ipairs({'GET_ITEM_INFO_RECEIVED','AUCTION_HOUSE_SHOW','AUCTION_HOUSE_CLOSED'}) do p:RegisterEvent(event) end
+  p:SetScript('OnEvent',function(_,event,id,success)
+    if event=='GET_ITEM_INFO_RECEIVED' then if success and id==itemId and p:IsShown() then draw() end
+    elseif C_Timer and C_Timer.After then C_Timer.After(0,updateItemLinks) else updateItemLinks() end
+  end)
   selectRange('all');return p
 end

@@ -72,6 +72,14 @@ local variant={itemID=1,itemLevel=7,itemSuffix=9,battlePetSpeciesID=0};assert(c.
 MarketeerForeverCoreDB.prices.test.items[1].variant='12:3:0';assert(c.OpenAuctionListings(1,55) and seenKey.itemLevel==12 and seenKey.itemSuffix==3)
 c.phase='browse';assert(not c.OpenAuctionListings(2,123));c.phase='idle'
 assert(not c.OpenAuctionListings(2,nil))
+local hidden=0;c.HideTradingMenu=function()hidden=hidden+1 end
+local gotID;AuctionHouseFrame.SelectBrowseResult=function(_,result)gotID=result.itemKey.itemID end
+c.OpenItemAuctions(1);assert(gotID==1 and hidden==0 and queryContext==2)
+MarketeerForeverCoreDB.prices.test.items[2]=nil;gotID=nil;chosenQuantity=nil
+c.OpenItemAuctions(2);assert(gotID==2 and hidden==0 and queryContext==2)
+for _,o in ipairs(objects) do if o.scripts.OnUpdate then o.scripts.OnUpdate(o,.3) end end
+assert(chosenQuantity==nil)
+c.phase='browse';c.OpenItemAuctions(1);assert(hidden==0);c.phase='idle'
 ''')
 print('Shopping quantities, bag progress and auction buy-view quantity passed.')
 lua.execute('''

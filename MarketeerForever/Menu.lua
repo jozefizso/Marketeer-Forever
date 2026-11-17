@@ -131,11 +131,11 @@ local function build()
   frame:SetScript('OnShow',function()coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true)end)
   frame:Hide()
 end
-function core.OpenTradingMenu(tab,id,level) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab((tab=='bag' or tab=='history' or tab=='farm' or tab=='lookup' or tab=='recipes' or tab=='auctionchat' or tab=='hotkeys' or tab=='toggles') and tab or lastTab);if tab=='history' and id then history:SetItem(id) elseif tab=='lookup' and id then lookup:SetItem(id) elseif tab=='farm' and id then core.SelectFarmMonster(id,level) elseif tab=='recipes' and id then recipes:SetItem(id) end end
+function core.OpenTradingMenu(tab,id,level) build();frame:Show();coinCheck:SetChecked(MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagCoinEnabled==true);frame.selectTab((tab=='bag' or tab=='history' or tab=='farm' or tab=='lookup' or tab=='recipes' or tab=='auctionchat' or tab=='hotkeys' or tab=='toggles') and tab or lastTab);if tab=='history' and id then history:SetItem(id) elseif tab=='lookup' and id then lookup:SetItem(id) elseif tab=='farm' and id then core.SelectFarmMonster(id,level) elseif tab=='recipes' and id then recipes:SetItem(id,level) end end
 function core.ShowMarketHistory(id) core.OpenTradingMenu('history',id) end
 function core.ShowItemDrops(id) core.OpenTradingMenu('lookup',tonumber(id)) end
 function core.ShowFarmMonster(id,level) core.OpenTradingMenu('farm',tonumber(id),level) end
-function core.ShowItemRecipes(id) core.OpenTradingMenu('recipes',tonumber(id)) end
+function core.ShowItemRecipes(id,recipeID) core.OpenTradingMenu('recipes',tonumber(id),tonumber(recipeID)) end
 local function setupMini()
   if mini then return end
   mini=CreateFrame('Button','MarketeerForeverMinimapButton',Minimap);mini:SetSize(32,32);mini:SetFrameStrata('MEDIUM');mini:RegisterForDrag('LeftButton');mini:RegisterForClicks('LeftButtonUp')

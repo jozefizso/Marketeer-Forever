@@ -32,7 +32,9 @@ listener.event(nil,'PLAYER_LOGIN');listener.event(nil,'ADDON_LOADED');assert(#CH
 local setting=CHAT_CONFIG_OTHER_SYSTEM[1];assert(not setting.checked());setting.func(nil,true);assert(setting.checked())
 local mail=CHAT_CONFIG_OTHER_SYSTEM[2];assert(mail.text=='Mailbox' and not mail.checked());mail.func(nil,true);assert(mail.checked())
 listener.event(nil,'CHAT_MSG_LOOT','Not at mailbox');assert(#ChatFrame2.messages==0)
-listener.event(nil,'MAIL_SHOW');listener.event(nil,'CHAT_MSG_LOOT','You receive item: Copper');assert(ChatFrame2.messages[1]=='You receive item: Copper')
+LOOT_ITEM_CREATED_SELF='You create: %s.';LOOT_ITEM_CREATED_SELF_MULTIPLE='You create: %1$sx%2$d.'
+listener.event(nil,'MAIL_SHOW');listener.event(nil,'CHAT_MSG_LOOT','You create: [Heavy Blasting Powder].');listener.event(nil,'CHAT_MSG_LOOT','You create: [Heavy Blasting Powder]x5.');assert(#ChatFrame2.messages==0)
+listener.event(nil,'CHAT_MSG_LOOT','You receive item: Copper');assert(ChatFrame2.messages[1]=='You receive item: Copper')
 listener.event(nil,'CHAT_MSG_MONEY','You loot 1 Gold');assert(ChatFrame2.messages[2]=='You loot 1 Gold')
 ChatFrame2.messageTypeList={'LOOT'};listener.event(nil,'CHAT_MSG_LOOT','Already visible');assert(#ChatFrame2.messages==2)
 ChatFrame2.messageTypeList={};listener.event(nil,'MAIL_CLOSED');listener.event(nil,'CHAT_MSG_MONEY','Outside');assert(#ChatFrame2.messages==2)
@@ -50,8 +52,15 @@ lastChatty=nil;Chattynator.API.GetWindowsAndTabs=function()return {{'General'}}e
 listener.event(nil,'AUCTION_HOUSE_SHOW_NOTIFICATION',1);assert(lastChatty==nil and #ChatFrame2.messages==2)
 Chattynator.API.GetWindowsAndTabs=function()return {{'General','Auction'}}end
 MarketeerForeverCoreDB.mailChattyTabs={['player-one']={['1'..string.char(31)..'Auction']=true}}
-listener.event(nil,'MAIL_SHOW');lastChatty=nil;listener.event(nil,'CHAT_MSG_LOOT','Mailbox item');assert(lastChatty[1]==1 and lastChatty[2]==2 and lastChatty[3]=='Mailbox item')
+listener.event(nil,'MAIL_SHOW');lastChatty=nil;listener.event(nil,'CHAT_MSG_LOOT','You create: [Heavy Blasting Powder].');assert(lastChatty==nil)
+lastChatty=nil;listener.event(nil,'CHAT_MSG_LOOT','Mailbox item');assert(lastChatty[1]==1 and lastChatty[2]==2 and lastChatty[3]=='Mailbox item')
 listener.event(nil,'MAIL_CLOSED');lastChatty=nil;listener.event(nil,'CHAT_MSG_MONEY','Outside');assert(lastChatty==nil)
+local balance=1000;GetMoney=function()return balance end;GetCoinTextureString=function(n)return tostring(n)..'c' end
+local timers={};C_Timer={After=function(_,fn)timers[#timers+1]=fn end}
+listener.event(nil,'MAIL_SHOW');balance=1400;listener.event(nil,'PLAYER_MONEY');assert(lastChatty==nil);timers[1]();assert(lastChatty[3]=='You gained: 400c')
+lastChatty=nil;balance=1600;listener.event(nil,'PLAYER_MONEY');listener.event(nil,'CHAT_MSG_MONEY','You receive 200c');assert(lastChatty[3]=='You receive 200c');lastChatty=nil;timers[2]();assert(lastChatty==nil)
+balance=1500;listener.event(nil,'PLAYER_MONEY');assert(#timers==2);listener.event(nil,'MAIL_CLOSED');balance=1800;listener.event(nil,'PLAYER_MONEY');assert(#timers==2)
+
 MarketeerForeverCore.ShowMailboxChatSettings()
 local mailRow
 for _,f in ipairs(frames) do local key=rawget(f,'key');if key and key:find('Auction',1,true) then mailRow=f end end
