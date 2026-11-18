@@ -262,11 +262,11 @@ local function calculate()
       local tableMarket=info and type(info.market)=="string" and info.market:lower():gsub("/", ".")
       if not info or tableMarket~=stats.market or not info.count or info.count<=0 then
         status:SetText("AHledger data missing for "..stats.market.." | See steps below")
-        detailBody:SetText("1. Run Marketeer Data Updater.exe.\n2. Select your region, ruleset and faction and click Update now.\n3. Type /reload in game, then return here and click Apply / Search.")
+        detailBody:SetText("1. Install and enable Marketeer Market Data.\n2. Update it in CurseForge, then type /reload in game.\n3. Return here and click Apply / Search.")
       elseif stats.eligible==0 and MarketeerForeverCraftDB.craftKnownOnly then
         detailBody:SetText("No known recipes are recorded for this character.\nOpen a profession window and click Capture recipes, or click Known only to show all recipes.")
       else
-        detailBody:SetText("Checked "..stats.eligible.." recipes: "..stats.missing.." missing auction prices, "..stats.missingSales.." missing sales estimates, "..stats.zeroSales.." with zero estimated sales, "..stats.belowSales.." below your daily minimum.\n"..stats.overBudget.." above budget; "..stats.failed.." failed profit filters. Check your scan, raise MAX SILVER, lower minimums, or switch Known only to All recipes.\nFor missing estimates, run the Marketeer Data Updater and reload.")
+        detailBody:SetText("Checked "..stats.eligible.." recipes: "..stats.missing.." missing auction prices, "..stats.missingSales.." missing sales estimates, "..stats.zeroSales.." with zero estimated sales, "..stats.belowSales.." below your daily minimum.\n"..stats.overBudget.." above budget; "..stats.failed.." failed profit filters. Check your scan, raise MAX SILVER, lower minimums, or switch Known only to All recipes.\nFor missing estimates, update Marketeer Market Data and reload.")
       end
     end
     return

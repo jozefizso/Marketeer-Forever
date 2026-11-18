@@ -32,6 +32,31 @@ function core.Market()
   if not rules then return nil,"Cannot identify realm ruleset" end
   return "forever/"..rules.."/"..faction:lower().."/"..region
 end
+-- Load only the current market's data module; older updater data remains usable.
+function core.LoadMarketSnapshot()
+  if _G.MarketeerSnapshotCompanion~=1 then return end
+  local market=core.Market();if not market then return end
+  local name="MarketeerSnapshot_"..market:gsub("/","_")
+  local api=C_AddOns
+  local exists=api and api.DoesAddOnExist or DoesAddOnExist
+  local loaded=api and api.IsAddOnLoaded or IsAddOnLoaded
+  local load=api and api.LoadAddOn or LoadAddOn
+  if type(load)~="function" then return end
+  if type(exists)=="function" and not exists(name) then return end
+  if type(loaded)=="function" and loaded(name) then return end
+  pcall(load,name)
+end
+function core.MarketHistoryData()
+  core.LoadMarketSnapshot()
+  local market=core.Market();local best
+  for _,data in ipairs({_G.MarketeerForeverHistory or false,_G.MarketeerSnapshotHistory or false}) do
+    if type(data)=="table" and (data.schemaVersion==1 or data.schemaVersion==2) and data.market==market and type(data.generatedAt)=="number" and data.generatedAt<=now()+300 and type(data.items)=="table" and (not best or data.generatedAt>best.generatedAt) then best=data end
+  end
+  return best
+end
+function core.ItemNamesData()
+  return _G.MarketeerSnapshotItemNames or _G.MarketeerForeverItemNames
+end
 function core.AutoScanEnabled() return not MarketeerForeverCoreDB or MarketeerForeverCoreDB.autoScan~=false end
 function core.AutoScanInterval() return math.max(30,tonumber(MarketeerForeverCoreDB and MarketeerForeverCoreDB.scanIntervalMinutes) or 30) end
 function core.SetAutoScan(enabled) if MarketeerForeverCoreDB then MarketeerForeverCoreDB.autoScan=enabled and true or false end end
@@ -74,12 +99,16 @@ end
 local tableCache={}
 local function getTable()
   local market,err=core.Market();if not market then return nil,err end
+  core.LoadMarketSnapshot()
   local data=_G.MarketeerForeverMarketData
   local src=type(data)=="table" and data.schemaVersion==1 and data.periodHours==24 and type(data.tables)=="table" and data.tables[market] or nil
   if type(src)=="table" and (type(src.updated)~="number" or src.updated<=0 or src.updated>now()+300 or now()-src.updated>48*3600 or type(src.text)~="string") then src=nil end
+  local snapshot=_G.MarketeerSnapshotMarketData
+  local fresh=type(snapshot)=="table" and snapshot.schemaVersion==1 and snapshot.periodHours==24 and type(snapshot.tables)=="table" and snapshot.tables[market] or nil
+  if type(fresh)=="table" and type(fresh.updated)=="number" and fresh.updated>0 and fresh.updated<=now()+300 and now()-fresh.updated<=48*3600 and type(fresh.text)=="string" and fresh.text~="" and type(fresh.count)=="number" and fresh.count>0 and (not src or fresh.updated>src.updated) then src=fresh end
   local imported=MarketeerForeverCoreDB and MarketeerForeverCoreDB.importedTables and MarketeerForeverCoreDB.importedTables[market]
   if type(imported)=="table" and type(imported.text)=="string" and (type(src)~="table" or (tonumber(imported.updated) or 0)>(tonumber(src.updated) or 0)) then src=imported end
-  if type(src)~="table" or type(src.text)~="string" then return nil,"Market data missing, invalid or older than 48 hours; run Marketeer Data Updater and enable Marketeer Data" end
+  if type(src)~="table" or type(src.text)~="string" then return nil,"Market data is missing or older than 48 hours; update and enable Marketeer Market Data" end
   local cache=tableCache[market]
   if cache and cache.src==src then return cache end
   local rows={};local n=0
@@ -87,7 +116,7 @@ local function getTable()
     local id,median,low,qty,m7,m30,lo,hi,sold=line:match("^(%d+):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):?(%d*)$")
     if id then rows[tonumber(id)]={minBuyout=tonumber(low),median=tonumber(median),median7d=tonumber(m7),median30d=tonumber(m30),quantity=tonumber(qty),soldPerDay=tonumber(sold) and tonumber(sold)/10 or nil};n=n+1 end
   end
-  if n==0 or (src.count and (type(src.count)~="number" or src.count~=n)) then return nil,"Invalid market data; run Marketeer Data Updater again" end
+  if n==0 or (src.count and (type(src.count)~="number" or src.count~=n)) then return nil,"Invalid market data; update Marketeer Market Data" end
   cache={src=src,market=market,updated=src.updated,count=n,items=rows,snapshot=false};tableCache[market]=cache;return cache
 end
 MarketeerForeverAPI={}
@@ -95,7 +124,9 @@ function MarketeerForeverAPI.GetMarket() return core.Market() end
 function MarketeerForeverAPI.GetTableInfo() local t,err=getTable();if not t then return nil,err end;return {market=t.market,updated=t.updated,count=t.count,snapshot=false} end
 function MarketeerForeverAPI.GetPrice(id) local t=getTable();local r=t and t.items[tonumber(id)];if not r then return nil end;return {market=t.market,updated=t.updated,soldPerDay=r.soldPerDay,minBuyout=r.minBuyout,median=r.median,median7d=r.median7d,median30d=r.median30d,quantity=r.quantity} end
 function MarketeerForeverAPI.GetTrend(id)
-  local d=_G.MarketeerForeverTrends;local market=core.Market()
+  core.LoadMarketSnapshot()
+  local market=core.Market();local d=_G.MarketeerForeverTrends;local candidate=_G.MarketeerSnapshotTrends
+  if type(candidate)=="table" and candidate.market==market and type(candidate.generatedAt)=="number" and (type(d)~="table" or d.market~=market or type(d.generatedAt)~="number" or candidate.generatedAt>d.generatedAt) then d=candidate end
   if type(d)~="table" or d.schemaVersion~=2 or not market or d.market~=market or type(d.generatedAt)~="number" or d.generatedAt>now()+300 or now()-d.generatedAt>48*3600 or type(d.items)~="table" then return nil end
   local r=d.items[tonumber(id)];if type(r)~="table" or type(r[5])~="number" or r[5]>now()+300 or now()-r[5]>48*3600 then return nil end
   local function price(n) if type(n)=="number" and n>0 then return n/2 end end

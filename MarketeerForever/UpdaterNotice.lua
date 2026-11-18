@@ -1,57 +1,41 @@
--- Remind at the auction house when the updater's current-market data needs attention.
+-- The announcement appears only after the new companion has usable data.
 local core=MarketeerForeverCore
-local DAY=24*60*60
-local function now() return (GetServerTime and GetServerTime()) or time() end
-local function status()
-  local market=core.Market and core.Market()
-  if not market then return 'Could not verify your current server and faction. Check the updater market selection.' end
-  local data=_G.MarketeerForeverMarketData
+local dialog,body,first,nextButton,back,confirm
+local function showAnnouncement()
+  if MarketeerForeverCoreDB and MarketeerForeverCoreDB.dataCompanionAcknowledged then return end
+  if dialog and dialog:IsShown() then return end
+  if _G.MarketeerSnapshotCompanion~=1 then return end
+  if not core.Market or not core.LoadMarketSnapshot then return end
+  local market=core.Market();if not market then return end
+  core.LoadMarketSnapshot()
+  local data=_G.MarketeerSnapshotMarketData
   local row=type(data)=='table' and data.schemaVersion==1 and data.periodHours==24 and type(data.tables)=='table' and data.tables[market]
-  if type(row)~='table' or type(row.text)~='string' or row.text=='' or type(row.updated)~='number' or row.updated<=0 or row.updated>now()+300 then
-    return 'Marketeer Data is missing, disabled, invalid, or does not contain this market.'
-  end
-  local age=now()-row.updated
-  if age>=DAY then return 'Your current market data is more than 24 hours old.' end
-  local info=MarketeerForeverAPI and MarketeerForeverAPI.GetTableInfo
-  local ok,result=pcall(function()return info and info()end)
-  if not ok or not result then return 'Marketeer Data for this market could not be read.' end
-  return nil
-end
--- Keep our reminder out of Blizzard's shared StaticPopupDialogs table.
-local dialog,dialogText
-local function showReminder(message)
+  local now=(GetServerTime and GetServerTime()) or time()
+  if type(row)~='table' or type(row.text)~='string' or row.text=='' or type(row.count)~='number' or row.count<=0 or type(row.updated)~='number' or row.updated<=0 or row.updated>now+300 or now-row.updated>48*3600 then return end
+  local line=row.text:match('[^\n]+')
+  if not line or not line:match('^%d+:%d*:%d*:%d*:%d*:%d*:%d*:%d*:%d*$') then return end
   if not dialog then
-    dialog=CreateFrame('Frame','MarketeerUpdaterReminder',UIParent,'BackdropTemplate')
-    dialog:SetSize(500,280);dialog:SetPoint('CENTER');dialog:SetFrameStrata('FULLSCREEN_DIALOG');dialog:SetClampedToScreen(true);dialog:EnableMouse(true)
-    dialog:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});dialog:SetBackdropColor(.055,.075,.065,.98);dialog:SetBackdropBorderColor(.25,.48,.34,1)
-    local title=dialog:CreateFontString(nil,'OVERLAY','GameFontNormalLarge');title:SetPoint('TOPLEFT',16,-16);title:SetText('MARKETEER DATA UPDATE NEEDED')
-    dialogText=dialog:CreateFontString(nil,'OVERLAY','GameFontHighlight');dialogText:SetPoint('TOPLEFT',16,-50);dialogText:SetPoint('TOPRIGHT',-16,-50);dialogText:SetJustifyH('LEFT');dialogText:SetWordWrap(true)
-    local later=CreateFrame('Button',nil,dialog,'UIPanelButtonTemplate');later:SetSize(160,25);later:SetPoint('BOTTOMLEFT',16,16);later:SetText('Remind me tomorrow');later:SetScript('OnClick',function()dialog:Hide()end)
-    local silence=CreateFrame('Button',nil,dialog,'UIPanelButtonTemplate');silence:SetSize(150,25);silence:SetPoint('BOTTOMRIGHT',-16,16);silence:SetText('Silence reminders');silence:SetScript('OnClick',function()MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.silenceUpdaterReminders=true;dialog:Hide()end)
-    dialog:Hide()
+    dialog=CreateFrame('Frame','MarketeerDataAnnouncement',UIParent,'BackdropTemplate');dialog:SetSize(520,300);dialog:SetPoint('CENTER');dialog:SetFrameStrata('FULLSCREEN_DIALOG');dialog:SetClampedToScreen(true);dialog:EnableMouse(true)
+    dialog:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});dialog:SetBackdropColor(.055,.075,.065,.98);dialog:SetBackdropBorderColor(.25,.58,.37,1)
+    local title=dialog:CreateFontString(nil,'OVERLAY','GameFontNormalLarge');title:SetPoint('TOPLEFT',18,-18);title:SetText('IMPORTANT: MARKETEER DATA UPDATE')
+    body=dialog:CreateFontString(nil,'OVERLAY','GameFontHighlight');body:SetPoint('TOPLEFT',18,-55);body:SetPoint('TOPRIGHT',-18,-55);body:SetJustifyH('LEFT');body:SetWordWrap(true)
+    first='You no longer need the separate Marketeer Data Updater. Market data now comes through the Marketeer data addon.\n\nEnable automatic addon updates in CurseForge, then reload WoW after data updates. We prepare data about every two hours; availability depends on CurseForge and your update settings.\n\nThank you for using Marketeer! Many more amazing updates are coming.'
+    nextButton=CreateFrame('Button',nil,dialog,'UIPanelButtonTemplate');nextButton:SetSize(160,26);nextButton:SetPoint('BOTTOMRIGHT',-18,18);nextButton:SetText('Continue')
+    back=CreateFrame('Button',nil,dialog,'UIPanelButtonTemplate');back:SetSize(100,26);back:SetPoint('BOTTOMLEFT',18,18);back:SetText('Back')
+    confirm=CreateFrame('Button',nil,dialog,'UIPanelButtonTemplate');confirm:SetSize(180,26);confirm:SetPoint('BOTTOMRIGHT',-18,18);confirm:SetText('Yes, I understand')
+    nextButton:SetScript('OnClick',function()body:SetText('Are you sure you know you no longer need the separate updater?\n\nIn your AddOns list, you can disable the old Marketeer Data addon. Keep Marketeer Market Data enabled; it replaces the old addon.\n\n|cffffd100HIGHLY RECOMMENDED: Enable automatic updates in CurseForge for Marketeer Market Data.|r\n\nReload WoW after an update to see fresh data. Thank you for being part of Marketeer!');nextButton:Hide();back:Show();confirm:Show()end)
+    back:SetScript('OnClick',function()body:SetText(first);back:Hide();confirm:Hide();nextButton:Show()end)
+    confirm:SetScript('OnClick',function()MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.dataCompanionAcknowledged=true;dialog:Hide()end)
   end
-  dialogText:SetText(message..'\n\nMarket demand, price history and other features rely on the Marketeer Data Updater. Download it from the Marketeer CurseForge page.\n\nSelect the addon folder and your server/market, then choose Update now. Enable Marketeer Data and /reload after updating.\n\nUpdate daily or leave the updater open and /reload periodically.')
-  dialog:Show();return dialog
+  body:SetText(first);back:Hide();confirm:Hide();nextButton:Show();dialog:Show()
 end
+-- Report blocked Marketeer actions without showing updater reminders.
 local events=CreateFrame('Frame')
-events:RegisterEvent('AUCTION_HOUSE_SHOW')
-for _,event in ipairs({'ADDON_ACTION_BLOCKED','ADDON_ACTION_FORBIDDEN'}) do pcall(events.RegisterEvent,events,event) end
+for _,event in ipairs({'PLAYER_LOGIN','AUCTION_HOUSE_SHOW','ADDON_ACTION_BLOCKED','ADDON_ACTION_FORBIDDEN'}) do pcall(events.RegisterEvent,events,event) end
 local lastBlocked
 events:SetScript('OnEvent',function(_,event,addon,action)
-  if event=='ADDON_ACTION_BLOCKED' or event=='ADDON_ACTION_FORBIDDEN' then
-    if addon=='MarketeerForever' and type(action)=='string' and (not issecretvalue or not issecretvalue(action)) and action~=lastBlocked then
-      lastBlocked=action;print('Marketeer: WoW blocked action '..action..'. Please report this message.')
-    end
-    return
+  if event=='PLAYER_LOGIN' or event=='AUCTION_HOUSE_SHOW' then if C_Timer and C_Timer.After then C_Timer.After(1,showAnnouncement) else showAnnouncement() end;return end
+  if (event=='ADDON_ACTION_BLOCKED' or event=='ADDON_ACTION_FORBIDDEN') and addon=='MarketeerForever' and type(action)=='string' and (not issecretvalue or not issecretvalue(action)) and action~=lastBlocked then
+    lastBlocked=action;print('Marketeer: WoW blocked action '..action..'. Please report this message.')
   end
-  local function check()
-    local db=MarketeerForeverCoreDB
-    if not core.active or (db and db.silenceUpdaterReminders) then return end
-    local last=db and tonumber(db.updaterReminderAt)
-    if last and last<=now() and now()-last<DAY then return end
-    local message=status();if not message then return end
-    local dialog=showReminder(message)
-    if dialog then MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.updaterReminderAt=now() end
-  end
-  if C_Timer and C_Timer.After then C_Timer.After(1,check) else check() end
 end)

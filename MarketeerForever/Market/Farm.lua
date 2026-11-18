@@ -114,7 +114,7 @@ local function refresh(preserve)
     end
   end
   local age=book.observed and math.max(0,math.floor(((GetServerTime and GetServerTime() or time())-book.observed)/60)) or nil
-  status:SetText('Last scan: '..(age and (age..' min ago') or 'age unknown')..' | '..(infoMarket==activityMarket and activityMarket and ('Demand: '..activityMarket) or ('Demand unavailable: '..tostring(activityError or 'run updater'))))
+  status:SetText('Last scan: '..(age and (age..' min ago') or 'age unknown')..' | '..(infoMarket==activityMarket and activityMarket and ('Demand: '..activityMarket) or ('Demand unavailable: '..tostring(activityError or 'update market data'))))
   sortButton:SetText(sortMode=='score' and 'Sort: Score' or 'Sort: Value');render()
 end
 function core.SelectFarmMonster(id,observedLevel)

@@ -2,6 +2,10 @@ Marketeer Forever - third-party data notices
 
 Market prices and activity: AHledger (https://ahledger.com/).
 
+Vendor locations: derived from QuestieDB Forever 1.1.3
+(https://github.com/Questie/QuestieDB); see data/questiedb/ for licensing,
+attribution and the source release.
+
 Monster drops, item sources, locations, and observed drop rates: Wowhead
 (https://www.wowhead.com/forever). Bundled as an incomplete snapshot;
 some observed rates use Classic Era fallback data.

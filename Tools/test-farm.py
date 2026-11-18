@@ -42,6 +42,7 @@ function methods:Show() self.shown=true;if self.scripts.OnShow then self.scripts
 function methods:SetShown(value) if value then self:Show() else self:Hide() end end
 function methods:IsShown() return self.shown end
 function methods:SetText(t) self.text=t end
+function methods:SetEnabled(v) self.enabled=v end
 function methods:SetMaxLetters(n) if n==100 then if not lookupInput then lookupInput=self else recipeInput=self end elseif n==3 then levelInput=self elseif n==60 and not farmSearch then farmSearch=self end end
 function methods:GetText() return rawget(self,'text') or '' end
 function methods:GetWidth() return 900 end
@@ -70,6 +71,9 @@ MarketeerForeverTabs={CreateTab=function(self,id,panel) self.id=id;self.panel=pa
 C_Timer={After=function(_,fn)fn()end}
 GameTooltip={SetOwner=function()end,AddLine=function(_,s) if type(s)=='string' then tooltipLines=tooltipLines..s..' ' end end,Show=function()end,Hide=function()end,IsShown=function()return true end,GetCenter=function()return 500,200 end}
 function hasText(s) for _,o in ipairs(objects) do local t=rawget(o,'text');if type(t)=='string' and t:find(s,1,true) then return true end end;return false end
+function scrollSource(s) for _,o in ipairs(objects) do if rawget(o,'text')==s and rawget(o,'parent') and o.parent.scripts.OnMouseWheel then o.parent.scripts.OnMouseWheel(o.parent,-1);return true end end;return false end
+function sourceFirst() for _,o in ipairs(objects) do if rawget(o,'parent') and rawget(o.parent,'view') and o.parent.scripts.OnMouseWheel and rawget(o,'text') and o.parent:IsShown() then return o.text end end end
+function sourceAction(name) for _,o in ipairs(objects) do if rawget(o,'text')==name and rawget(o,'parent') and rawget(o.parent,'view') and o.parent:IsShown() then return o.parent.view end end end
 function hoverAligned(header,value) local a,b;for _,o in ipairs(objects) do if rawget(o,'parent')==hoverCard then if rawget(o,'text')==header then a=o.point[4] elseif rawget(o,'text')==value then b=o.point[4] end end end;return a~=nil and a==b end
 function clickLabel(s) for _,o in ipairs(objects) do if rawget(o,'text')==s and o.scripts.OnClick then o.scripts.OnClick(o);return true end end;return false end
 function clickButtonText(s) for _,o in ipairs(objects) do if rawget(o,'text')==s and rawget(o,'parent') and o.parent.scripts.OnClick then o.parent.scripts.OnClick(o.parent);return true end end end
@@ -93,6 +97,22 @@ book.items[1]=nil;x=MarketeerForeverCore.RecipeEstimate(recipe,book,nil);assert(
 recipe.yieldMin=nil;x=MarketeerForeverCore.RecipeEstimate(recipe,{items={[1]={price=10},[2]={price=100}}},nil);assert(x.gainMin==nil)
 ''')
 lua.execute((root.parent / 'Menu.lua').read_text(encoding='utf-8'))
+lua.execute("MarketeerForeverCore.ShowItemDrops(2515);assert(hasText('Aemara'));assert(scrollSource('Aemara'));assert(hasText('2-7 of 93'))")
+lua.execute('''
+MarketeerLocalVendors={items={[2515]={1,2,3}},areas={[1]=100},npcs={[1]={'Vendor 1','H',{[1]={{10,10}}}},[2]={'Vendor 2','H',{[1]={{20,10}}}},[3]={'Enemy','A',{[1]={{5,10}}}}}}
+CreateVector2D=function(x,y)return {GetXY=function()return x,y end}end
+C_Map={GetBestMapForUnit=function()return 100 end,GetPlayerMapPosition=function()return CreateVector2D(0,0)end,GetWorldPosFromMapPos=function(_,p)return 1,p end,GetMapInfo=function()return {name='Alterac Mountains'}end}
+UnitFactionGroup=function()return 'Horde' end
+TomTom={AddWaypoint=function(_,map,x,y,opts)assert(map==100 and x==.1 and y==.1 and opts.crazy and opts.minimap and opts.world and opts.title=='Vendor 1');return 12 end}
+assert(clickLabel('Nearest vendor'));assert(hasText('Arrow set to Vendor 1'))
+TomTom=nil;UiMapPoint={CreateFromCoordinates=function(map,x,y)return {map=map,x=x,y=y}end};C_Map.SetUserWaypoint=function(point)assert(point.map==100 and point.x==.1);return true end;C_SuperTrack={SetSuperTrackedUserWaypoint=function(v)assert(v);nativeWaypoint=true end}
+assert(clickLabel('Nearest vendor') and nativeWaypoint and hasText('Waypoint set to Vendor 1'))
+MarketeerLocalVendors.npcs[1][1]='Aemara';MarketeerLocalVendors.npcs[2][1]='Abigail Sawyer'
+assert(clickLabel('Sort: Location A-Z'));assert(hasText('Sort: Nearest'));assert(sourceFirst()=='Aemara')
+local action=sourceAction('Aemara');assert(action and action.text=='Track' and action.enabled,'Aemara track disabled');action.scripts.OnClick(action);assert(hasText('Waypoint set to Aemara'))
+local other=sourceAction('Abigail Sawyer');assert(other and other.text=='Track' and not other.enabled,'Abigail track should be disabled: '..tostring(other)..' '..tostring(other and other.enabled))
+assert(clickLabel('Sort: Nearest'));assert(sourceFirst()=='Aemara','unexpected location order: '..tostring(sourceFirst()))
+''')
 lua.execute("MarketeerForeverCore.FarmHasSpawnReferences=function(id)return id==481 end")
 lua.execute("MarketeerForeverCore.OpenTradingMenu('farm');assert(MarketeerForeverTabs.id==nil and levelInput:GetText()=='');checkTooltips();farmSearch:SetText('Defias Footpad');levelInput:SetText('1');levelInput.scripts.OnEnterPressed(levelInput);assert(hasText('No results with the current filters'));levelInput:SetText('');levelInput.scripts.OnEnterPressed(levelInput);assert(not hasText('No results with the current filters'));farmSearch:SetText('');MarketeerForeverCore.ShowItemDrops(2589);assert(hasText('Linen Cloth') and hasText('Tamara Armstrong'));MarketeerForeverCore.ShowFarmMonster(481,10);assert(hasText('Defias Footpad') and farmSearch:GetText()=='Defias Footpad' and levelInput:GetText()=='10');MarketeerForeverCore.ShowItemDrops(3340);assert(lookupInput:GetText()=='Incendicite Ore' and hasText('Incendicite Mineral Vein') and hasText('Mined from'));MarketeerForeverCore.OpenTradingMenu('history');MarketeerForeverCore.OpenTradingMenu('bag');ContainerFrameItemButtonMixin.OnClick({GetBagID=function()return 0 end,GetID=function()return 1 end},'RightButton');assert(nativeClicks==1 and lookupInput:GetText()=='Linen Cloth');clickedItem=279981;ContainerFrameItemButtonMixin.OnClick({GetBagID=function()return 0 end,GetID=function()return 1 end},'RightButton');assert(nativeClicks==2 and recipeInput:GetText()~='' and hasText('Basic Campfire'))")
 lua.execute("MarketeerForeverCore.ShowFarmMonster(481,10);local f=MarketeerForeverCore.CreateFarmPanel(UIParent);assert(f:IsShown() and hasText('Defias Footpad | Level') and hasText('|A:Waypoint-MapPin-Untracked:14:14|a Defias Footpad') and hasText('Classic spawn data'));f:Hide();MarketeerForeverCore.OpenTradingMenu();assert(f:IsShown() and farmSearch:GetText()=='Defias Footpad' and levelInput:GetText()=='10' and hasText('Defias Footpad | Level'))")

@@ -1,0 +1,3 @@
+# Install only after project approval and successful manual validation.
+# CurseForge may hold a release for review; the publisher refuses to stack files.
+*/5 * * * * root /usr/bin/flock -n /var/lib/marketeer-data-publisher/publish.lock /usr/bin/env PYTHONPATH=/opt/marketeer-history /usr/bin/python3 /opt/marketeer-data-publisher/publish_data_addon.py --db /var/lib/marketeer-history/trends.sqlite3 --token-file /var/lib/marketeer-data-publisher/curseforge-upload-token --state-file /var/lib/marketeer-data-publisher/state.json --project 1814022 --output /var/lib/marketeer-data-publisher/MarketeerMarketData.zip >> /var/lib/marketeer-data-publisher/publisher.log 2>&1

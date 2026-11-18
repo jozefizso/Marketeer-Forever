@@ -302,7 +302,7 @@ function core.ImportShoppingList(text)
     local key=name:lower();if not wanted[key] then return end
     if ids[key]==nil then ids[key]=id elseif ids[key]~=id then ids[key]=false end
   end
-  local catalog=_G.MarketeerForeverItemNames
+  local catalog=core.ItemNamesData and core.ItemNamesData() or _G.MarketeerForeverItemNames
   if type(catalog)=='table' and type(catalog.items)=='table' then for id,name in pairs(catalog.items) do remember(id,name) end end
   local lookup=_G.MarketeerForeverFarmLookup
   if type(lookup)=='table' and type(lookup.items)=='table' then for id,item in pairs(lookup.items) do if type(item)=='table' then remember(id,item.name) end end end
