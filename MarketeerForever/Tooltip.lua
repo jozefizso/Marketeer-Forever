@@ -39,6 +39,8 @@ local function stackCount(tooltip,id)
   if count then return count,cost,true end
   local owner=tooltip.GetOwner and tooltip:GetOwner()
   if not owner then return nil end
+  -- An owned-auction icon represents its listing's quantity rather than a bag slot.
+  if owner.marketeerAuctionItemID==id and type(owner.marketeerAuctionQuantity)=="number" and owner.marketeerAuctionQuantity>0 then return owner.marketeerAuctionQuantity,nil,false,true end
   if AuctionHouseFrame then
     for _,key in ipairs({"CommoditiesSellFrame","ItemSellFrame"}) do
       local frame=AuctionHouseFrame[key]

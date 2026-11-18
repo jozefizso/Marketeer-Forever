@@ -168,6 +168,25 @@ local function comparison(auction)
   return lower>0 and "undercut" or "no lower price",lower
 end
 core.CompareOwned=comparison
+-- Owner-separated, price-sorted commodity results follow the sell queue.
+-- Competitor rows may be grouped, so this counts units rather than listings.
+local function matchedAhead(auction)
+  local result=auction.itemKey and competitions[keyString(auction.itemKey)]
+  if not result or not result.complete or result.unresolved or not result.commodity then return nil end
+  local unit=auctionValues(auction)
+  if not unit or not auction.auctionID then return nil end
+  local ahead=0
+  for _,row in ipairs(result.rows) do
+    if row.auctionID==auction.auctionID and row.ownMixed then
+      if row.price==unit and row.quantity==auction.quantity then return ahead end
+      return nil
+    end
+    if row.price==unit and row.ownMixed and (not row.auctionID or row.auctionID==0) then return nil end
+    if row.price==unit and not row.ownMixed then ahead=ahead+row.quantity end
+  end
+  return nil
+end
+core.MatchedAhead=matchedAhead
 local function selectedCount()
   local n=0;for _ in pairs(selectedAuctions) do n=n+1 end;return n
 end
@@ -222,9 +241,9 @@ local function render()
       rowY=rowY-(expanded and 148 or 32)
       local name=itemName(item)
       local unit,total=auctionValues(item)
-      local condition,ahead=comparison(item)
+      local condition,ahead=comparison(item);local matched=matchedAhead(item)
       local marketLow=lowestPrice(item.itemKey and competitions[keyString(item.itemKey)])
-      row.icon:SetTexture(itemIcon(item));row.name:SetText(name);row.quantity:SetText(tostring(item.quantity or "?"));row.unit:SetText(formatMoney(unit));row.total:SetText(formatMoney(total));row.low:SetText(formatMoney(marketLow));row.state:SetText(condition=="no lower price" and "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t" or condition);row.ahead:SetText(ahead~=nil and tostring(ahead) or "--");row.deposit:SetText(formatMoney(auctionDeposit(item)));row.time:SetText(timeLeft(item))
+      row.icon:SetTexture(itemIcon(item));row.name:SetText(name);row.quantity:SetText(tostring(item.quantity or "?"));row.unit:SetText(formatMoney(unit));row.total:SetText(formatMoney(total));row.low:SetText(formatMoney(marketLow));row.state:SetText(condition=="no lower price" and "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t" or condition);row.ahead:SetText(ahead~=nil and tostring(ahead) or "--");row.matched:SetText(matched~=nil and tostring(matched) or "--");row.deposit:SetText(formatMoney(auctionDeposit(item)));row.time:SetText(timeLeft(item))
       row.state:SetTextColor(condition=="undercut" and 1 or .75,condition=="undercut" and .3 or .85,.4)
       row.select:SetChecked(selectedAuctions[item.auctionID] and true or false);row.select:SetEnabled(core.active and state.ownedComplete and not state.cancelPending)
       row.expand:SetText(expanded and "-" or "+");row.detail:SetShown(expanded)
@@ -250,7 +269,7 @@ local function render()
   end
   page:ClearAllPoints();page:SetPoint("TOPLEFT",panel,"TOPLEFT",16,rowY-8)
   status:SetText(#owned.." active auctions | "..(state.cancelPending and "Refreshing after cancellation..." or selected>0 and (selected.." selected: click Cancel next once per auction.") or state.search and "Checking competition..." or (#state.queue>0 and state.index<=#state.queue and "Competition scan queued" or (#state.queue>0 and "Competition checks complete" or "Use Scan market to refresh comparisons"))))
-  page:SetText((#owned==0 and "No listings" or ((scrollOffset+1).."-"..math.min(scrollOffset+8,#owned).." of "..#owned)).."  |  Scroll to browse  |  Market low can include yours  |  -- = unavailable")
+  page:SetText((#owned==0 and "No listings" or ((scrollOffset+1).."-"..math.min(scrollOffset+8,#owned).." of "..#owned)).."  |  Scroll to browse  |  Matched ahead: same-price units before yours  |  -- = unavailable")
 end
 local function refreshOwned(fromOwnedUpdate)
   if not core.active or not C_AuctionHouse or not C_AuctionHouse.GetNumOwnedAuctions or not C_AuctionHouse.GetOwnedAuctionInfo then return end
@@ -292,7 +311,7 @@ local function createPanel()
   if panel or not AuctionHouseFrame or not MarketeerForeverTabs then return end
   panel=CreateFrame("Frame",nil,AuctionHouseFrame,"BackdropTemplate");panel:Hide();panel:SetPoint("TOPLEFT",AuctionHouseFrame,"TOPLEFT",12,-75);panel:SetPoint("BOTTOMRIGHT",AuctionHouseFrame,"BOTTOMRIGHT",-12,35);panel:SetFrameStrata("DIALOG");panel:SetFrameLevel(AuctionHouseFrame:GetFrameLevel()+50);panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});panel:SetBackdropColor(.055,.065,.07,1);panel:SetBackdropBorderColor(.24,.30,.28,1)
   local previousWidth,previousHeight
-  panel:SetScript("OnShow",function() if not previousWidth then previousWidth,previousHeight=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(previousWidth+(MarketeerForeverCore.AuctionPanelExtraWidth or 367),previousHeight+180) end;if core.active then state.visitedOwned=true;if state.needChecks then refreshOwned() end end end)
+  panel:SetScript("OnShow",function() if not previousWidth then previousWidth,previousHeight=AuctionHouseFrame:GetWidth(),AuctionHouseFrame:GetHeight();AuctionHouseFrame:SetSize(previousWidth+(MarketeerForeverCore.AuctionPanelExtraWidth or 367)+80,previousHeight+180) end;if core.active then state.visitedOwned=true;if state.needChecks then refreshOwned() end end end)
   local confirm=CreateFrame("Frame","MarketeerForeverCancelConfirmation",UIParent,"BackdropTemplate")
   confirm:SetSize(320,105);confirm:SetPoint("CENTER");confirm:SetFrameStrata("FULLSCREEN_DIALOG");confirm:SetClampedToScreen(true)
   confirm:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1});confirm:SetBackdropColor(.055,.065,.07,.98);confirm:SetBackdropBorderColor(.3,.5,.38,1)
@@ -322,15 +341,23 @@ local function createPanel()
   summary=rowText(panel,16,-40,700);status=rowText(panel,16,-60,700)
   incoming=rowText(panel,16,-80,850)
   local header=CreateFrame("Frame",nil,panel,"BackdropTemplate");header:SetPoint("TOPLEFT",panel,"TOPLEFT",12,-102);header:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-32,-102);header:SetHeight(21);header:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});header:SetBackdropColor(.13,.18,.17,1)
-  for _,col in ipairs({{"ITEM",4,200},{"QTY",205,65},{"UNIT",270,80},{"TOTAL",350,90},{"MKT LOW",440,85},{"STATUS",525,75},{"LOWER",600,65},{"DEPOSIT",665,80},{"TIME",745,60}}) do local label=header:CreateFontString(nil,"OVERLAY","GameFontNormalSmall");label:SetPoint("TOPLEFT",header,"TOPLEFT",col[2],-4);label:SetWidth(col[3]);label:SetJustifyH("LEFT");label:SetText(col[1]) end
+  for _,col in ipairs({{"ITEM",4,200},{"QTY",205,65},{"UNIT",270,80},{"TOTAL",350,90},{"MKT LOW",440,85},{"STATUS",525,75},{"LOWER",600,65},{"MATCHED",665,80},{"DEPOSIT",745,80},{"TIME",825,60}}) do local label=header:CreateFontString(nil,"OVERLAY","GameFontNormalSmall");label:SetPoint("TOPLEFT",header,"TOPLEFT",col[2],-4);label:SetWidth(col[3]);label:SetJustifyH("LEFT");label:SetText(col[1]) end
   rows={}
   for i=1,8 do
     local row=CreateFrame("Frame",nil,panel,"BackdropTemplate");row:SetPoint("TOPLEFT",panel,"TOPLEFT",12,-124-(i-1)*32);row:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-32,-124-(i-1)*32);row:SetHeight(30);row:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"});row:SetBackdropColor(i%2==0 and .12 or .08,.12,.12,.95)
     row.select=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate");row.select:SetSize(23,23);row.select:SetPoint("TOPLEFT",row,"TOPLEFT",2,-3)
     row.select:SetScript("OnClick",function(self) if row.item and row.item.auctionID and not state.cancelPending then selectedAuctions[row.item.auctionID]=self:GetChecked() and true or nil;render() end end)
     row.expand=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.expand:SetSize(18,20);row.expand:SetPoint("TOPLEFT",row,"TOPLEFT",27,-5);row.expand:SetText("+");row.expand:SetScript("OnClick",function() if row.item then if expandedAuction==row.item.auctionID then expandedAuction=nil else expandedAuction=row.item.auctionID end;render() end end)
-    row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetSize(22,22);row.icon:SetPoint("TOPLEFT",row,"TOPLEFT",49,-4)
-    row.name=rowText(row,76,-8,128);row.quantity=rowText(row,205,-8,65);row.unit=rowText(row,270,-8,80);row.total=rowText(row,350,-8,90);row.low=rowText(row,440,-8,85);row.state=rowText(row,525,-8,75);row.ahead=rowText(row,600,-8,65);row.deposit=rowText(row,665,-8,80);row.time=rowText(row,745,-8,60)
+    row.itemHover=CreateFrame("Button",nil,row);row.itemHover:SetSize(155,22);row.itemHover:SetPoint("TOPLEFT",row,"TOPLEFT",49,-4)
+    row.icon=row.itemHover:CreateTexture(nil,"ARTWORK");row.icon:SetSize(22,22);row.icon:SetPoint("LEFT",row.itemHover,"LEFT")
+    row.itemHover:SetScript("OnEnter",function(self)
+      local item=row.item;if not item or not item.itemKey or not GameTooltip then return end
+      self.marketeerAuctionItemID=item.itemKey.itemID;self.marketeerAuctionQuantity=item.quantity
+      GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+      GameTooltip:SetHyperlink(item.itemLink or ("item:"..item.itemKey.itemID));GameTooltip:Show()
+    end)
+    row.itemHover:SetScript("OnLeave",function(self)self.marketeerAuctionItemID=nil;self.marketeerAuctionQuantity=nil;if GameTooltip then GameTooltip:Hide() end end)
+    row.name=rowText(row,76,-8,128);row.quantity=rowText(row,205,-8,65);row.unit=rowText(row,270,-8,80);row.total=rowText(row,350,-8,90);row.low=rowText(row,440,-8,85);row.state=rowText(row,525,-8,75);row.ahead=rowText(row,600,-8,65);row.matched=rowText(row,665,-8,80);row.deposit=rowText(row,745,-8,80);row.time=rowText(row,825,-8,60)
     row.detail=rowText(row,25,-31,850);row.detail:SetWordWrap(true);row.detail:Hide()
     row.view=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.view:SetSize(50,22);row.view:SetPoint("TOPRIGHT",row,"TOPRIGHT",-60,-4);row.view:SetText("View");row.view:SetScript("OnClick",function()
       local item=row.item
@@ -381,11 +408,12 @@ local function checkDone()
     local info=get(arg,i)
     if info and type(info.quantity)=="number" and info.quantity>0 then
       local price=search.commodity and info.unitPrice or core.ItemSearchUnitPrice(search.key.itemID,info.buyoutAmount,info.quantity)
-      if type(price)=="number" and price>0 then rows[#rows+1]={price=price,quantity=info.quantity,ownMixed=info.containsOwnerItem==true} end
+      if type(price)=="number" and price>0 then rows[#rows+1]={price=price,quantity=info.quantity,ownMixed=info.containsOwnerItem==true,auctionID=info.auctionID}
+      elseif search.commodity then unresolved=true end
       if not search.commodity and type(info.buyoutAmount)=="number" and info.buyoutAmount>0 and not price then unresolved=true end
-    end
+    else unresolved=true end
   end
-  competitions[search.keyString]={complete=true,rows=rows,unresolved=unresolved};state.search=nil;state.index=state.index+1;render()
+  competitions[search.keyString]={complete=true,rows=rows,unresolved=unresolved,commodity=search.commodity};state.search=nil;state.index=state.index+1;render()
 end
 local function pump()
   if not core.active or core.phase~="idle" or core.working.buyout or core.working.resaleView or state.search or state.index>#state.queue then return end
@@ -393,7 +421,7 @@ local function pump()
   local key=state.queue[state.index];local info=C_AuctionHouse.GetItemKeyInfo and C_AuctionHouse.GetItemKeyInfo(key)
   if not info or type(info.isCommodity)~="boolean" then state.index=state.index+1;return end
   state.search={key=key,keyString=keyString(key),commodity=info.isCommodity,started=(GetServerTime and GetServerTime()) or time()}
-  local ok=pcall(C_AuctionHouse.SendSearchQuery,key,{},true)
+  local ok=pcall(C_AuctionHouse.SendSearchQuery,key,{{sortOrder=info.isCommodity and 0 or 4,reverseSort=false}},true)
   if not ok then state.search=nil;state.index=state.index+1 end
 end
 startChecks=function()

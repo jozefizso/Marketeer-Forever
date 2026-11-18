@@ -61,6 +61,15 @@ listener.event(nil,'MAIL_SHOW');balance=1400;listener.event(nil,'PLAYER_MONEY');
 lastChatty=nil;balance=1600;listener.event(nil,'PLAYER_MONEY');listener.event(nil,'CHAT_MSG_MONEY','You receive 200c');assert(lastChatty[3]=='You receive 200c');lastChatty=nil;timers[2]();assert(lastChatty==nil)
 balance=1500;listener.event(nil,'PLAYER_MONEY');assert(#timers==2);listener.event(nil,'MAIL_CLOSED');balance=1800;listener.event(nil,'PLAYER_MONEY');assert(#timers==2)
 
+-- Blizzard chat: Mailbox is enabled and Money Loot is disabled on Auction.
+Chattynator=nil;ChatFrame2.messageTypeList={};ChatFrame2.messages={};balance=2000
+listener.event(nil,'MAIL_SHOW');balance=16100;listener.event(nil,'PLAYER_MONEY');listener.event(nil,'MAIL_CLOSED');timers[3]()
+assert(#ChatFrame2.messages==1 and ChatFrame2.messages[1]=='You gained: 14100c')
+listener.event(nil,'MAIL_SHOW');balance=16200;listener.event(nil,'PLAYER_MONEY');listener.event(nil,'CHAT_MSG_MONEY','You loot 100c');timers[4]()
+assert(#ChatFrame2.messages==2 and ChatFrame2.messages[2]=='You loot 100c')
+listener.event(nil,'MAIL_CLOSED')
+
+Chattynator={API={GetWindowsAndTabs=function()return {{'General','Auction'}} end,AddMessageToWindowAndTab=function(w,t,text)lastChatty={w,t,text}end}}
 MarketeerForeverCore.ShowMailboxChatSettings()
 local mailRow
 for _,f in ipairs(frames) do local key=rawget(f,'key');if key and key:find('Auction',1,true) then mailRow=f end end

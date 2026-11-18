@@ -22,6 +22,33 @@ called=nil;state.cancelPending=nil;C_AuctionHouse.CanCancelAuction=function()ret
 cancelNext();assert(called==nil)
 ''')
 print('Each click cancels one selected listing, with pending and eligibility guards.')
+tooltip=(Path(__file__).resolve().parents[1]/'MarketeerForever/Tooltip.lua').read_text(encoding='utf8')
+part=tooltip[tooltip.index('local function stackCount('):tooltip.index('local function vendorSellValue(')]
+lua.execute('''
+local function merchantDetails() return nil end
+local MarketeerForeverCore={}
+'''+part+'''
+local owner={marketeerAuctionItemID=42,marketeerAuctionQuantity=7}
+local tip={GetOwner=function()return owner end}
+local qty,_,_,auction=stackCount(tip,42);assert(qty==7 and auction==true)
+assert(stackCount(tip,43)==nil)
+''')
+lua.execute('assert(loadstring(...))',tooltip)
+lua.execute('assert(loadstring(...))',source)
+print('Owned auction tooltips use the selected listing quantity.')
+part=source[source.index('local function matchedAhead('):source.index('core.MatchedAhead=matchedAhead')]
+lua.execute('''
+local competitions={};local function keyString(k)return tostring(k.itemID) end
+local function auctionValues(a)return a.price end
+'''+part+'''
+local item={itemKey={itemID=42},auctionID=2,price=100,quantity=5}
+local result={complete=true,commodity=true,rows={{price=90,quantity=10},{price=100,quantity=7},{price=100,quantity=3,ownMixed=true,auctionID=1},{price=100,quantity=5,ownMixed=true,auctionID=2},{price=100,quantity=9}}}
+competitions['42']=result;assert(matchedAhead(item)==7)
+result.rows[4].quantity=4;assert(matchedAhead(item)==nil);result.rows[4].quantity=5
+result.rows[2].ownMixed=true;result.rows[2].auctionID=0;assert(matchedAhead(item)==nil)
+result.commodity=false;assert(matchedAhead(item)==nil)
+''')
+print('Matched-ahead counts same-price competitor units and rejects uncertain results.')
 start=source.index('local function requestCancellation(id)')
 end=source.index('local function cancelNext()',start)
 lua.execute('''

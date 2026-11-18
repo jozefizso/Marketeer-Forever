@@ -38,8 +38,10 @@ function core.CreateHistoryPanel(parent)
   label(p,'GameFontNormal',22,-115):SetText('MARKET HISTORY')
   local hint=label(p,'GameFontHighlightSmall',22,-137,575);hint:SetText('Type an item name, ID, or link. Alt+left-click an item to open it.')
   local input=CreateFrame('EditBox',nil,p,'InputBoxTemplate');input:SetSize(300,24);input:SetPoint('TOPLEFT',p,'TOPLEFT',30,-158);input:SetAutoFocus(false);input:SetMaxLetters(240)
-  local name=label(p,'GameFontNormal',22,-194,570)
-  local meta=label(p,'GameFontHighlightSmall',22,-215,580)
+  local name=label(p,'GameFontNormal',64,-194,528)
+  local meta=label(p,'GameFontHighlightSmall',64,-215,538)
+  local itemButton=CreateFrame('Button',nil,p);itemButton:SetSize(34,34);itemButton:SetPoint('TOPLEFT',p,'TOPLEFT',22,-194);itemButton:Hide()
+  local itemIcon=itemButton:CreateTexture(nil,'ARTWORK');itemIcon:SetAllPoints(itemButton)
   local chart=CreateFrame('Frame',nil,p,'BackdropTemplate');chart:SetPoint('TOPLEFT',p,'TOPLEFT',110,-276);chart:SetPoint('BOTTOMRIGHT',p,'BOTTOMRIGHT',-40,69);chart:EnableMouse(true)
   local hoverAnchor=CreateFrame('Frame',nil,chart);hoverAnchor:SetSize(1,1)
   chart:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});chart:SetBackdropColor(.03,.055,.05,.96);chart:SetBackdropBorderColor(.24,.38,.31,1)
@@ -55,6 +57,30 @@ function core.CreateHistoryPanel(parent)
   note:ClearAllPoints();note:SetPoint('BOTTOMLEFT',p,'BOTTOMLEFT',22,20)
   status:ClearAllPoints();status:SetPoint('CENTER',chart,'CENTER',0,0)
   local range='all';local itemId;local lines={};local dots={};local displayed={};local graphStart,graphEnd
+  -- Use a real bag slot when available so stack-dependent tooltip values match
+  -- the bag. Otherwise the standard item tooltip still shows per-unit data.
+  local function findBagItem(id)
+    local c=C_Container
+    if not c or not c.GetContainerNumSlots or not c.GetContainerItemInfo then return end
+    local last=(Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag) or NUM_BAG_SLOTS or 4
+    for bag=0,last do
+      for slot=1,(c.GetContainerNumSlots(bag) or 0) do
+        local info=c.GetContainerItemInfo(bag,slot)
+        if info and info.itemID==id then return bag,slot end
+      end
+    end
+  end
+  function itemButton:GetBagID() return self.historyBag end
+  function itemButton:GetID() return self.historySlot end
+  itemButton:SetScript('OnEnter',function(self)
+    if not itemId or not GameTooltip then return end
+    self.historyBag,self.historySlot=findBagItem(itemId)
+    GameTooltip:SetOwner(self,'ANCHOR_RIGHT')
+    if self.historyBag and GameTooltip.SetBagItem then GameTooltip:SetBagItem(self.historyBag,self.historySlot)
+    else GameTooltip:SetHyperlink('item:'..itemId) end
+    GameTooltip:Show()
+  end)
+  itemButton:SetScript('OnLeave',function(self) self.historyBag=nil;self.historySlot=nil;if GameTooltip then GameTooltip:Hide() end end)
   local results,resultsOffset,selectedResult={},0,1
   local searchIndex,indexData,indexCatalog,indexMarket
   local suppressSearch=false;local searchSerial=0;local renderedQuery;local searchJob;local pendingChoose=false
@@ -98,6 +124,9 @@ function core.CreateHistoryPanel(parent)
   end
   draw=function()
     clearGraph();updateItemLinks();if not itemId then return end
+    local icon=(C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(itemId)) or (GetItemIcon and GetItemIcon(itemId))
+    if not icon and C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID,itemId) end
+    itemIcon:SetTexture(icon or 134400);itemButton:Show()
     local points,d=dataFor(itemId)
     if not d then name:SetText('Item #'..itemId);meta:SetText('');status:SetText('Market history unavailable. Run the data updater and enable Marketeer Data.');return end
     local itemName=itemNameFor(itemId);name:SetText(itemName and (itemName..'  |cff9aa9a4#'..itemId..'|r') or ('Item #'..itemId))
