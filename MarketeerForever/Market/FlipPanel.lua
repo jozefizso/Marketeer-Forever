@@ -552,7 +552,15 @@ local function createPanel()
     row.buy=makeText(row,nil,cols[2][2],-11,cols[2][3]);row.ah=makeText(row,nil,cols[3][2],-11,cols[3][3]);row.gain=makeText(row,nil,cols[4][2],-11,cols[4][3]);row.gain:SetTextColor(0.45,0.9,0.64);row.stackGain=makeText(row,nil,cols[5][2],-11,cols[5][3]);row.stackGain:SetTextColor(0.45,0.9,0.64);row.activity=makeText(row,nil,cols[6][2],-11,cols[6][3]);row.listed=makeText(row,nil,cols[7][2],-11,cols[7][3]);row.gap=makeText(row,nil,cols[8][2],-11,cols[8][3])
     row.resaleView=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.resaleView:SetSize(52,22);row.resaleView:SetPoint("TOPRIGHT",row,"TOPRIGHT",-5,-5);row.resaleView:SetText("View");row.resaleView:Hide();row.resaleView:SetScript("OnClick",function() if row.item then openResale(row.item) end end)
     row:SetScript("OnEnter",function(self)if self.item and self.name.IsTruncated and self.name:IsTruncated() and GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(self.item.name);GameTooltip:Show() end end);row:SetScript("OnLeave",function()if GameTooltip then GameTooltip:Hide() end end)
-    row:SetScript("OnClick",function(self,button) if self.item then if (not button or button=="LeftButton") and IsAltKeyDown and IsAltKeyDown() and MarketeerForeverCore.ShowMarketHistory then MarketeerForeverCore.ShowMarketHistory(self.item.id) else setSelected(self.item) end end end);rows[i]=row
+    row:RegisterForClicks("LeftButtonUp","RightButtonUp")
+    row:SetScript("OnClick",function(self,button)
+      if not self.item then return end
+      if IsAltKeyDown and IsAltKeyDown() then
+        if button=="RightButton" and MarketeerForeverCore.ShowItemDrops then MarketeerForeverCore.ShowItemDrops(self.item.id);return end
+        if (not button or button=="LeftButton") and MarketeerForeverCore.ShowMarketHistory then MarketeerForeverCore.ShowMarketHistory(self.item.id);return end
+      end
+      if not button or button=="LeftButton" then setSelected(self.item) end
+    end);rows[i]=row
   end
   scrollbar=CreateFrame("Slider","MarketeerForeverMarketResultsScrollBar",panel,"UIPanelScrollBarTemplate")
   scrollbar:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-14,-161);scrollbar:SetPoint("BOTTOMRIGHT",panel,"BOTTOMRIGHT",-14,82);scrollbar:SetWidth(16)

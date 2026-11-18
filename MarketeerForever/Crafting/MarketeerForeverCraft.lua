@@ -18,7 +18,7 @@ local function initialize()
   db = MarketeerForeverCraftDB
   db.schema = 1
   if db.autoScan == nil then db.autoScan = false end
-  if not db.rotationSetup then db.scanIntervalMinutes = 5; db.rotationSetup = true end
+  if not db.rotationSetup then if db.scanIntervalMinutes == nil then db.scanIntervalMinutes = 5 end; db.rotationSetup = true end
   db.scanIntervalMinutes = math.max(1, tonumber(db.scanIntervalMinutes) or 5)
   db.itemCatalog = db.itemCatalog or {}
   db.vendorOffers = db.vendorOffers or {}

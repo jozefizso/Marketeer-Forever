@@ -278,10 +278,9 @@ events:SetScript("OnEvent",function(_,event,arg)
     -- Existing and migrated installations should not receive the first-install notice.
     showFirstInstallNotice=type(MarketeerForeverCoreDB)~="table" and type(MarketeerForeverMarketDB)~="table" and type(MarketeerForeverCraftDB)~="table" and type(NokiUnifiedCoreDB)~="table" and type(NokiUnifiedMarketDB)~="table" and type(NokiUnifiedCraftDB)~="table"
     -- Legacy names are declared only to migrate a copied Noki Trading save once.
-    if type(MarketeerForeverCoreDB)~="table" and type(NokiUnifiedCoreDB)=="table" then MarketeerForeverCoreDB=NokiUnifiedCoreDB end
-    if type(MarketeerForeverMarketDB)~="table" and type(NokiUnifiedMarketDB)=="table" then MarketeerForeverMarketDB=NokiUnifiedMarketDB end
-    if type(MarketeerForeverCraftDB)~="table" and type(NokiUnifiedCraftDB)=="table" then MarketeerForeverCraftDB=NokiUnifiedCraftDB end
-    NokiUnifiedCoreDB=nil;NokiUnifiedMarketDB=nil;NokiUnifiedCraftDB=nil
+    if type(MarketeerForeverCoreDB)~="table" and type(NokiUnifiedCoreDB)=="table" then MarketeerForeverCoreDB=NokiUnifiedCoreDB;NokiUnifiedCoreDB=nil end
+    if type(MarketeerForeverMarketDB)~="table" and type(NokiUnifiedMarketDB)=="table" then MarketeerForeverMarketDB=NokiUnifiedMarketDB;NokiUnifiedMarketDB=nil end
+    if type(MarketeerForeverCraftDB)~="table" and type(NokiUnifiedCraftDB)=="table" then MarketeerForeverCraftDB=NokiUnifiedCraftDB;NokiUnifiedCraftDB=nil end
     MarketeerForeverCoreDB=MarketeerForeverCoreDB or {};MarketeerForeverCoreDB.prices=MarketeerForeverCoreDB.prices or {};if MarketeerForeverCoreDB.bagCoinEnabled==nil then MarketeerForeverCoreDB.bagCoinEnabled=true end;if MarketeerForeverCoreDB.autoScan==nil then MarketeerForeverCoreDB.autoScan=true end;core.SetAutoScanInterval(MarketeerForeverCoreDB.scanIntervalMinutes or 30)
   elseif event=="PLAYER_LOGIN" then
     if showFirstInstallNotice then

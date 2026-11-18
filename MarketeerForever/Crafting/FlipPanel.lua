@@ -377,7 +377,7 @@ local function createPanel()
     row:SetScript("OnClick",function(self,button)
       if not self.item then return end
       if IsAltKeyDown and IsAltKeyDown() then
-        if button=="RightButton" and viewMode=="craft" and self.item.recipe and MarketeerForeverCore.ShowItemRecipes then MarketeerForeverCore.ShowItemRecipes(self.item.id,self.item.recipe.id);return end
+        if button=="RightButton" and viewMode=="craft" and MarketeerForeverCore.ShowItemDrops then MarketeerForeverCore.ShowItemDrops(self.item.id);return end
         if (not button or button=="LeftButton") and MarketeerForeverCore.ShowMarketHistory then MarketeerForeverCore.ShowMarketHistory(self.item.id);return end
       end
       if not button or button=="LeftButton" then setSelected(self.item) end
