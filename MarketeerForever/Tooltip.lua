@@ -183,7 +183,46 @@ end
 MarketeerForeverCore.TooltipProfitEstimate=profitEstimate
 -- A separate, non-interactive panel keeps market trends out of the item tooltip.
 local trendPanel,recipePanel
+local pinned=false
+local pinnedAnchored=false
+local lastShiftTime,lastShiftItem
+local function bagTooltipItem(tooltip,id)
+  local owner=tooltip and tooltip.GetOwner and tooltip:GetOwner()
+  if not owner then return false end
+  local bag=owner.GetBagID and owner:GetBagID();local slot=owner.GetID and owner:GetID()
+  local parent=owner.GetParent and owner:GetParent()
+  if type(bag)~='number' and parent and parent.GetName and (parent:GetName() or ''):match('^ContainerFrame%d+') then bag=parent.GetID and parent:GetID() end
+  if (type(bag)~='number' or type(slot)~='number') and owner.GetItemLocation then
+    local ok,location=pcall(owner.GetItemLocation,owner)
+    if ok and location and location.GetBagAndSlot then local valid,b,s=pcall(location.GetBagAndSlot,location);if valid then bag,slot=b,s end end
+  end
+  local last=(Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag) or NUM_BAG_SLOTS or 4
+  if type(bag)~='number' or bag<0 or bag>last or type(slot)~='number' or slot<1 then return false end
+  local info=C_Container and C_Container.GetContainerItemInfo and C_Container.GetContainerItemInfo(bag,slot)
+  return type(info)=='table' and (info.itemID or (type(info.hyperlink)=='string' and tonumber(info.hyperlink:match('item:(%d+)'))))==id
+end
 local function hideTrendPanel() if trendPanel then trendPanel:Hide() end;if recipePanel then recipePanel:Hide() end end
+function MarketeerForeverCore.ClosePinnedMarketDetails()
+  pinned=false;pinnedAnchored=false;lastShiftTime=nil;lastShiftItem=nil
+  if trendPanel then if trendPanel.dragging then trendPanel:StopMovingOrSizing();trendPanel.dragging=false end;trendPanel:EnableMouse(false) end
+  hideTrendPanel()
+end
+function MarketeerForeverCore.IsMarketDetailsPinned() return pinned end
+local function freezePinnedPosition()
+  if not pinned or not trendPanel or pinnedAnchored then return end
+  local p=trendPanel
+  local left=p.GetLeft and p:GetLeft();local top=p.GetTop and p:GetTop()
+  local ps=p.GetEffectiveScale and p:GetEffectiveScale();local us=UIParent and UIParent.GetEffectiveScale and UIParent:GetEffectiveScale()
+  if type(left)~='number' or type(top)~='number' or type(ps)~='number' or type(us)~='number' or us<=0 then return end
+  p:ClearAllPoints();p:SetPoint('TOPLEFT',UIParent,'BOTTOMLEFT',left*ps/us,top*ps/us)
+  pinnedAnchored=true
+end
+local function beginPinnedDrag()
+  if pinned and trendPanel then freezePinnedPosition();if pinnedAnchored then trendPanel.dragging=true;trendPanel:StartMoving() end end
+end
+local function endPinnedDrag()
+  if trendPanel and trendPanel.dragging then trendPanel:StopMovingOrSizing();trendPanel.dragging=false end
+end
 local function knownResourceRecipes(itemID)
   local realm=GetRealmName and GetRealmName();local player=UnitName and UnitName('player')
   local books=realm and player and MarketeerForeverCraftDB and MarketeerForeverCraftDB.crafting and MarketeerForeverCraftDB.crafting[realm..'|'..player]
@@ -193,7 +232,7 @@ local function knownResourceRecipes(itemID)
     for recipeID,saved in pairs(type(book)=='table' and book.recipes or {}) do
       local recipe=(catalog and (catalog[recipeID] or catalog[tonumber(recipeID)])) or saved
       for _,material in ipairs(type(recipe)=='table' and recipe.materials or {}) do
-        if material.id==itemID then found[#found+1]={profession=profession,name=recipe.name or (type(saved)=='table' and saved.name) or ('Recipe #'..tostring(recipeID))};break end
+        if material.id==itemID then found[#found+1]={profession=profession,name=recipe.name or (type(saved)=='table' and saved.name) or ('Recipe #'..tostring(recipeID)),recipe=recipe};break end
       end
     end
   end
@@ -201,31 +240,76 @@ local function knownResourceRecipes(itemID)
   return found
 end
 MarketeerForeverCore.KnownResourceRecipes=knownResourceRecipes
+local function recipeMarketEstimate(recipe,book)
+  local result={};if type(recipe)~='table' then return result end
+  local items=book and book.items;local output=items and items[recipe.output]
+  if output and not output.carried and type(output.price)=='number' and output.price>0 then result.price=output.price end
+  if output and not output.carried and type(output.quantity)=='number' and output.quantity>=0 then result.listed=output.quantity end
+  local cost,valid=0,type(recipe.materials)=='table' and #recipe.materials>0 and not recipe.review
+  if valid then for _,material in ipairs(recipe.materials) do
+    local row=items and items[material.id]
+    if not (row and not row.carried and type(row.price)=='number' and row.price>0 and type(material.quantity)=='number' and material.quantity>0) then valid=false;break end
+    cost=cost+row.price*material.quantity
+  end end
+  if valid then result.cost=cost end
+  if type(recipe.yieldMin)=='number' and recipe.yieldMin>0 then result.yield=recipe.yieldMin end
+  if result.cost and result.price and result.yield then result.profit=math.floor(result.price*result.yield*.95)-result.cost end
+  local activity=MarketeerForeverAPI and MarketeerForeverAPI.GetPrice and recipe.output and MarketeerForeverAPI.GetPrice(recipe.output)
+  if activity and type(activity.soldPerDay)=='number' and activity.soldPerDay>=0 then result.sales=activity.soldPerDay end
+  if result.sales and result.listed then result.gap=result.sales-result.listed end
+  return result
+end
+MarketeerForeverCore.RecipeMarketEstimate=recipeMarketEstimate
 local function showRecipePanel(owner,itemID)
   local recipes=knownResourceRecipes(itemID)
   if #recipes==0 then if recipePanel then recipePanel:Hide() end;return end
   if not recipePanel then
     local p=CreateFrame('Frame',nil,UIParent,'BackdropTemplate');recipePanel=p
-    p:SetSize(240,280);p:SetFrameStrata('TOOLTIP');p:SetClampedToScreen(true);p:EnableMouse(true);p:EnableMouseWheel(true)
+    p:SetSize(430,280);p:SetFrameStrata('TOOLTIP');p:SetClampedToScreen(true);p:EnableMouse(true);p:EnableMouseWheel(true)
+    p:RegisterForDrag('LeftButton');p:SetScript('OnDragStart',beginPinnedDrag);p:SetScript('OnDragStop',endPinnedDrag)
     p:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1});p:SetBackdropColor(.035,.055,.052,.98);p:SetBackdropBorderColor(.31,.66,.47,1)
     p.title=p:CreateFontString(nil,'OVERLAY','GameFontNormalSmall');p.title:SetPoint('TOPLEFT',p,'TOPLEFT',12,-12);p.title:SetText('KNOWN RECIPES')
-    p.lines={};for i=1,12 do local line=p:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall');line:SetPoint('TOPLEFT',p,'TOPLEFT',12,-30-(i-1)*18);line:SetWidth(216);line:SetJustifyH('LEFT');line:SetWordWrap(false);p.lines[i]=line end
+    p.lines={};for i=1,16 do
+      local y=-30-(i-1)*18;local left=p:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall');left:SetPoint('TOPLEFT',p,'TOPLEFT',12,y);left:SetWidth(210);left:SetJustifyH('LEFT');left:SetWordWrap(false)
+      local right=p:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall');right:SetPoint('TOPRIGHT',p,'TOPRIGHT',-12,y);right:SetWidth(190);right:SetJustifyH('RIGHT');right:SetWordWrap(false)
+      local band=p:CreateTexture(nil,'BACKGROUND');band:SetPoint('TOPLEFT',p,'TOPLEFT',8,y+2);band:SetPoint('TOPRIGHT',p,'TOPRIGHT',-8,y+2);band:SetHeight(17);band:SetColorTexture(.14,.25,.19,.7);band:Hide()
+      local divider=p:CreateTexture(nil,'ARTWORK');divider:SetPoint('LEFT',p,'TOPLEFT',12,y-5);divider:SetPoint('RIGHT',p,'TOPRIGHT',-12,y-5);divider:SetHeight(1);divider:SetColorTexture(.22,.36,.28,.8);divider:Hide()
+      p.lines[i]={left=left,right=right,band=band,divider=divider}
+    end
     p.footer=p:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall');p.footer:SetPoint('BOTTOMLEFT',p,'BOTTOMLEFT',12,9)
     p:SetScript('OnMouseWheel',function(self,delta)self.offset=math.max(0,math.min(math.max(0,#self.entries-#self.lines),(self.offset or 0)-delta*3));self:Render()end)
     function p:Render()
-      for i,line in ipairs(self.lines) do local entry=self.entries[(self.offset or 0)+i];if entry then line:SetText(entry);line:Show() else line:Hide() end end
-      self.footer:SetText(#self.entries>#self.lines and 'Scroll for more recipes' or 'Captured known recipes')
+      for i,line in ipairs(self.lines) do
+        local entry=self.entries[(self.offset or 0)+i]
+        if entry then
+          line.left:SetText(entry[1]);line.right:SetText(entry[2] or '');line.left:Show();line.right:Show()
+          line.band:SetShown(entry[3]=='recipe');line.divider:SetShown(entry[3]=='divider')
+        else line.left:Hide();line.right:Hide();line.band:Hide();line.divider:Hide() end
+      end
+      self.footer:SetText(#self.entries>#self.lines and 'Scroll | estimates; min yield; no deposits' or 'Estimates; min yield; no deposits')
     end
   end
   local entries,last={},nil
+  local market=MarketeerForeverCore.Market();local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
+  local function signed(value,monetary)
+    if type(value)~='number' then return '--' end
+    local color=value>0 and '|cff71e4a2' or value<0 and '|cffff7777' or '|cffdddddd'
+    local amount=monetary and money(math.abs(value)) or (string.format('%.1f',math.abs(value)):gsub('%.0$',''))
+    return color..(value>0 and '+' or value<0 and '-' or '')..amount..'|r'
+  end
   for _,recipe in ipairs(recipes) do
-    if recipe.profession~=last then last=recipe.profession;entries[#entries+1]='|cffffd100'..last..'|r' end
-    entries[#entries+1]='  '..recipe.name
+    if last then entries[#entries+1]={'','','divider'} end
+    if recipe.profession~=last then last=recipe.profession;entries[#entries+1]={'|cffffd100'..last..'|r'} end
+    local estimate=recipeMarketEstimate(recipe.recipe,book)
+    entries[#entries+1]={' |cffb3f2cb'..recipe.name..(recipe.recipe.review and ' (review)' or '')..'|r','','recipe'}
+    entries[#entries+1]={'  Cost / craft: '..(estimate.cost and money(estimate.cost) or '--'),'Profit after 5%: '..signed(estimate.profit,true)}
+    entries[#entries+1]={'  AH low / unit: '..(estimate.price and money(estimate.price) or '--'),'Yield: '..(estimate.yield and tostring(estimate.yield)..' min' or '--')}
+    entries[#entries+1]={'  Est. sales / day: '..(estimate.sales and tostring(estimate.sales) or '--'),'Gap: '..signed(estimate.gap,false)}
   end
   local p=recipePanel;p.entries=entries;if p.itemID~=itemID then p.offset=0 end;p.itemID=itemID;p:Render()
   p:SetHeight(50+math.min(#entries,#p.lines)*18);p:ClearAllPoints()
   local right=owner.GetRight and owner:GetRight();local scale=owner.GetEffectiveScale and owner:GetEffectiveScale();local uiScale=UIParent.GetEffectiveScale and UIParent:GetEffectiveScale();local screenWidth=UIParent.GetWidth and UIParent:GetWidth()
-  if type(right)=='number' and type(scale)=='number' and type(uiScale)=='number' and type(screenWidth)=='number' and right*scale/uiScale+248>screenWidth then p:SetPoint('TOPRIGHT',owner,'TOPLEFT',-8,0)
+  if type(right)=='number' and type(scale)=='number' and type(uiScale)=='number' and type(screenWidth)=='number' and right*scale/uiScale+438>screenWidth then p:SetPoint('TOPRIGHT',owner,'TOPLEFT',-8,0)
   else p:SetPoint('TOPLEFT',owner,'TOPRIGHT',8,0) end
   p:Show()
 end
@@ -258,7 +342,8 @@ end
 local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,now,details)
   if not trendPanel then
     local p=CreateFrame("Frame",nil,UIParent,"BackdropTemplate");trendPanel=p
-    p:SetSize(365,600);p:SetFrameStrata("TOOLTIP");p:SetClampedToScreen(true);p:EnableMouse(false)
+    p:SetSize(365,600);p:SetFrameStrata("TOOLTIP");p:SetClampedToScreen(true);p:SetMovable(true);p:EnableMouse(false)
+    p:RegisterForDrag('LeftButton');p:SetScript('OnDragStart',beginPinnedDrag);p:SetScript('OnDragStop',endPinnedDrag)
     p:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1})
     p:SetBackdropColor(.035,.055,.052,.98);p:SetBackdropBorderColor(.31,.66,.47,1)
     p.headings={};p.badges={}
@@ -270,7 +355,7 @@ local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,no
       p.badges[i]=badge
     end
     p.rows={}
-    for i=1,22 do
+    for i=1,24 do
       local left=p:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");left:SetWidth(180);left:SetJustifyH('LEFT');left:SetWordWrap(false)
       local right=p:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");right:SetWidth(165);right:SetJustifyH("RIGHT");right:SetWordWrap(false)
       p.rows[i]={left=left,right=right}
@@ -278,6 +363,7 @@ local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,no
     p.footer=p:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");p.footer:SetPoint("BOTTOMLEFT",p,"BOTTOMLEFT",12,8);p.footer:SetText('Whole packs / crafts; min yield; deposits excluded')
     p:SetScript("OnUpdate",function(self,elapsed)
       local o=self.trendOwner
+      if pinned then freezePinnedPosition();return end
       if not IsShiftKeyDown or not IsShiftKeyDown() then hideTrendPanel();return end
       -- Auction-house tooltips may briefly hide or change their item while
       -- refreshing. Wait for that transition to settle before hiding the panel.
@@ -306,6 +392,9 @@ local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,no
   local qty=details.estimate.quantity;local scan=details.scanPrice;local est=details.estimate
   local vendorLow,vendorUnit,vendorProfit=profitForCost(est.vendor,qty,scan)
   local craftLow,craftUnit,craftProfit=profitForCost(est.craft,qty,scan)
+  local craftCostPerUnit=est.craftPerCraft and est.craftYield and est.craftYield>0 and est.craftPerCraft/est.craftYield or nil
+  local craftProfitPerUnit=craftCostPerUnit and scan and scan*.95-craftCostPerUnit or nil
+  local craftMinimumProfitPerUnit=craftCostPerUnit and craftUnit and craftUnit*.95-craftCostPerUnit or nil
   local gap=details.sales and details.listed and details.sales-details.listed
   local gapText='Unavailable'
   if gap then
@@ -330,13 +419,15 @@ local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,no
     {'P/L at that unit price',signed(vendorProfit)},
   }
   local craftRows={
-    {'AH low / unit',scan and money(scan) or 'No scan'},
-    {'Sale after 5% AH cut',net and money(net) or 'Unavailable'},
     {'Recipe',est.craftLabel or 'Unavailable'},
-    {'Craft cost ('..qty..')',est.craft~=nil and money(est.craft) or 'Unavailable'},
-    {'Profit after AH cut',signed(craftLow)},
-    {'First profitable / unit',craftUnit and money(craftUnit) or 'Unavailable'},
-    {'P/L at that unit price',signed(craftProfit)},
+    {'AH low / unit',scan and money(scan) or 'No scan'},
+    {'Craft cost for 1',craftCostPerUnit and money(craftCostPerUnit) or 'Unavailable'},
+    {'Profit ea AH match',signed(craftProfitPerUnit)},
+    {'Craft cost for ('..qty..')',est.craft~=nil and money(est.craft) or 'Unavailable'},
+    {'Profit for ('..qty..') AH match',signed(craftLow)},
+    {'Lowest profitable unit price',craftUnit and money(craftUnit) or 'Unavailable'},
+    {'P/L at lowest possible ('..qty..')',signed(craftProfit)},
+    {'P/L at lowest possible (1)',signed(craftMinimumProfitPerUnit)},
   }
   local historyRows={}
   local periods={{"24 hours",trend and trend.p24},{"48 hours",trend and trend.p48},{"14 days",trend and trend.p14}}
@@ -379,15 +470,17 @@ local function showTrendPanel(owner,id,trend,current,currentAge,currentSource,no
   end
   for i=#sections+1,#p.headings do p.headings[i]:Hide();p.badges[i]:Hide() end
   for i=rowIndex+1,#p.rows do p.rows[i].left:Hide();p.rows[i].right:Hide() end
+  p.footer:SetText(pinned and 'Pinned | drag to move | Shift to close' or (bagTooltipItem(owner,id) and 'Double-tap Shift to pin | no deposits' or 'Whole packs / crafts; min yield; deposits excluded'))
   p:SetHeight(-y+22);placeTrendPanel(p,owner)
   p:Show()
+  p:EnableMouse(pinned);if pinned then freezePinnedPosition() end
   showRecipePanel(p,id)
 end
 local function addValue(tooltip,data)
   if tooltip.IsForbidden and tooltip:IsForbidden() then return end
   local link;if tooltip.GetItem then local _;_,link=tooltip:GetItem() end
   local id=type(link)=="string" and tonumber(link:match("item:(%d+)")) or (data and data.id)
-  if not id then if tooltip==GameTooltip then hideTrendPanel() end;return end
+  if not id then if tooltip==GameTooltip and not pinned then hideTrendPanel() end;return end
   if tooltip==GameTooltip and MarketeerForeverCore.RefreshBagRuleForTooltip then MarketeerForeverCore.RefreshBagRuleForTooltip(tooltip,id) end
   local market=MarketeerForeverCore.Market();local book=market and MarketeerForeverCoreDB and MarketeerForeverCoreDB.prices and MarketeerForeverCoreDB.prices[market]
   local row=book and book.items and book.items[id];local count,cost,isMerchant,isAuction=stackCount(tooltip,id)
@@ -423,7 +516,8 @@ local function addValue(tooltip,data)
     if count and count>0 then pair('AH stack price ('..count..')'..source,money(currentPrice*count)) end
   end
   if scanAge then tooltip:AddLine("Scan: "..scanAge.."m ago",.7,.8,.75) end
-  if not IsShiftKeyDown or not IsShiftKeyDown() then if tooltip==GameTooltip then hideTrendPanel() end;tooltip:Show();return end
+  if pinned and tooltip==GameTooltip and trendPanel and trendPanel:IsShown() then tooltip:Show();return end
+  if not IsShiftKeyDown or not IsShiftKeyDown() then if tooltip==GameTooltip and not pinned then hideTrendPanel() end;tooltip:Show();return end
   local trend=MarketeerForeverAPI and MarketeerForeverAPI.GetTrend and MarketeerForeverAPI.GetTrend(id)
   local activity=MarketeerForeverAPI and MarketeerForeverAPI.GetPrice(id)
   local scanPrice=row and not row.carried and type(row.price)=='number' and row.price>0 and row.price or nil
@@ -438,6 +532,7 @@ end
 if TooltipDataProcessor and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Item then TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item,itemTooltipCallback)
 elseif GameTooltip and GameTooltip.HookScript then GameTooltip:HookScript("OnTooltipSetItem",itemTooltipCallback) end
 local f=CreateFrame("Frame");f:RegisterEvent("MODIFIER_STATE_CHANGED");f:RegisterEvent("GET_ITEM_INFO_RECEIVED");f:SetScript("OnEvent",function(_,event,key,success)
+  if event=='MODIFIER_STATE_CHANGED' and (key=='LSHIFT' or key=='RSHIFT') and success==1 and pinned then MarketeerForeverCore.ClosePinnedMarketDetails();return end
   if not GameTooltip or not GameTooltip.IsShown or not GameTooltip:IsShown() or not GameTooltip.RefreshData or not GameTooltip.GetItem then return end
   if GameTooltip.IsForbidden and GameTooltip:IsForbidden() then return end
   local ok,_,link=pcall(GameTooltip.GetItem,GameTooltip)
@@ -445,6 +540,11 @@ local f=CreateFrame("Frame");f:RegisterEvent("MODIFIER_STATE_CHANGED");f:Registe
   if not itemID then return end
   if event=="MODIFIER_STATE_CHANGED" then
     if key~="LSHIFT" and key~="RSHIFT" then return end
+    if success==1 and bagTooltipItem(GameTooltip,itemID) then
+      local now=GetTime and GetTime() or 0
+      if lastShiftItem==itemID and lastShiftTime and now-lastShiftTime<=1 then pinned=true;lastShiftTime=nil;lastShiftItem=nil
+      else lastShiftTime=now;lastShiftItem=itemID end
+    end
   else
     if not success or itemID~=key then return end
   end

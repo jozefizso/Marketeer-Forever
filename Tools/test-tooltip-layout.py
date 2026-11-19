@@ -13,7 +13,8 @@ GetServerTime=function()return 1060 end;IsShiftKeyDown=function()return true end
 GameTooltip={lines={},GetItem=function()return 'Item','item:42' end,GetOwner=function()return {marketeerAuctionItemID=42,marketeerAuctionQuantity=200}end,
  AddDoubleLine=function(self,a,b)self.lines[#self.lines+1]={a,b}end,AddLine=function(self,a)self.lines[#self.lines+1]={a}end,Show=function()end}
 TooltipDataProcessor={AddTooltipPostCall=function(_,fn)callback=fn end};Enum={TooltipDataType={Item=1}}
-CreateFrame=function()return {RegisterEvent=function()end,SetScript=function()end}end
+eventFrames={}
+CreateFrame=function()return {RegisterEvent=function(self,event)eventFrames[event]=self end,SetScript=function(self,_,fn)self.handler=fn end}end
 ''')
 source=(Path(__file__).resolve().parents[1] / 'MarketeerForever/Tooltip.lua').read_text(encoding='utf-8-sig')
 lua.execute(source)
@@ -55,9 +56,14 @@ lua.execute('''
 local texts={};local methods={}
 function methods:SetText(s)texts[#texts+1]=s end
 function methods:CreateFontString()return setmetatable({}, {__index=methods}) end
-function methods:SetScript()end
+function methods:CreateTexture()return setmetatable({}, {__index=methods}) end
+function methods:SetScript(name,fn)local scripts=rawget(self,'scripts') or {};self.scripts=scripts;scripts[name]=fn end
+function methods:Show()self.shown=true end
+function methods:Hide()self.shown=false end
+function methods:IsShown()return self.shown==true end
 setmetatable(methods,{__index=function()return function()end end})
-CreateFrame=function()return setmetatable({}, {__index=methods})end
+local uiFrames={}
+CreateFrame=function()local frame=setmetatable({}, {__index=methods});uiFrames[#uiFrames+1]=frame;return frame end
 UIParent=CreateFrame();GameTooltip={lines={},GetItem=function()return 'Item','item:42' end,GetOwner=function()return {marketeerAuctionItemID=42,marketeerAuctionQuantity=200}end,
  AddDoubleLine=function(self,a,b)self.lines[#self.lines+1]={a,b}end,AddLine=function(self,a)self.lines[#self.lines+1]={a}end,Show=function()end}
 MarketeerForeverCore.OwnedVendorCost=function()return {cost=900}end
@@ -69,11 +75,44 @@ GetRealmName=function()return 'Realm' end;UnitName=function()return 'Player' end
 MarketeerForeverCraftDB={crafting={['Realm|Player']={Cooking={recipes={[1]={name='Fish feast'}}},Alchemy={recipes={[2]={name='Elixir'},[3]={name='Other'}}}},['Realm|Other']={Cooking={recipes={[4]={name='Not mine'}}}}}}
 MarketeerForeverCraftCraftCatalog={recipes={[1]={name='Fish feast',materials={{id=42}}},[2]={name='Elixir',materials={{id=42}}},[3]={name='Other',materials={{id=99}}},[4]={name='Not mine',materials={{id=42}}},[5]={name='Unknown',materials={{id=42}}}}}
 local known=MarketeerForeverCore.KnownResourceRecipes(42);assert(#known==2 and known[1].profession=='Alchemy' and known[2].profession=='Cooking')
+local calc=MarketeerForeverCore.RecipeMarketEstimate
+local recipe={output=50,yieldMin=2,materials={{id=42,quantity=3},{id=43,quantity=1}}}
+local prices={items={[42]={price=5},[43]={price=10},[50]={price=30,quantity=20}}}
+local result=calc(recipe,prices);assert(result.cost==25 and result.profit==32 and result.price==30 and result.yield==2 and result.sales==30 and result.gap==10)
+prices.items[43].carried=true;result=calc(recipe,prices);assert(result.cost==nil and result.profit==nil and result.sales==30)
+prices.items[43].carried=nil;recipe.review=true;result=calc(recipe,prices);assert(result.cost==nil and result.profit==nil)
 texts={};callback(GameTooltip,{id=42});all=table.concat(texts,'|');assert(all:find('KNOWN RECIPES',1,true) and all:find('Elixir',1,true) and all:find('Fish feast',1,true) and not all:find('Not mine',1,true))
+assert(all:find('Cost / craft:',1,true) and all:find('Profit after 5%:',1,true) and all:find('AH low / unit:',1,true) and all:find('Est. sales / day:',1,true) and all:find('Gap:',1,true))
+MarketeerForeverCraftCraftCatalog.recipes[6]={output=42,yieldMin=200,name='Batch craft',materials={{id=43,quantity=200}}}
+MarketeerForeverCoreDB.prices.test.items[43]={price=2};texts={};callback(GameTooltip,{id=42});all=table.concat(texts,'|')
+assert(all:find('Craft cost for 1|2',1,true) and all:find('Profit ea AH match||cff71e4a2+2.75',1,true))
+assert(all:find('Lowest profitable unit price',1,true) and all:find('P/L at lowest possible (200)',1,true) and all:find('P/L at lowest possible (1)',1,true))
 texts={};MarketeerForeverCore.OwnedVendorCost=function()return {cost=1200}end
 MarketeerForeverCoreDB.prices.test.items[42].quantity=40;callback(GameTooltip,{id=42})
 all=table.concat(texts,'|');assert(all:find('Demand gap||cffff6666-10|r',1,true));assert(all:find('|cffff7777LOSS|r',1,true))
 texts={};MarketeerForeverCoreDB.prices.test.items[42].price=nil;callback(GameTooltip,{id=42})
 all=table.concat(texts,'|');assert(all:find('|cffbdbdbdNO SCAN|r',1,true))
+local down,clock=false,0;IsShiftKeyDown=function()return down end;GetTime=function()return clock end
+local bagOwner={GetBagID=function()return 0 end,GetID=function()return 2 end}
+C_Container={GetContainerItemInfo=function()return {itemID=42,stackCount=200}end}
+GameTooltip.GetOwner=function()return bagOwner end;GameTooltip.IsShown=function()return true end
+GameTooltip.RefreshData=function()callback(GameTooltip,{id=42})end
+local event=eventFrames.MODIFIER_STATE_CHANGED
+local marketPanel,knownPanel
+for _,frame in ipairs(uiFrames) do if rawget(frame,'rows') and rawget(frame,'headings') then marketPanel=frame elseif rawget(frame,'entries') and rawget(frame,'lines') then knownPanel=frame end end
+assert(marketPanel and knownPanel)
+marketPanel.dragging=false
+marketPanel.GetLeft=function()return 100 end;marketPanel.GetTop=function()return 500 end;marketPanel.GetEffectiveScale=function()return 1 end
+UIParent.GetEffectiveScale=function()return 1 end
+marketPanel.SetPoint=function(self,point,relative,relativePoint,x,y)self.anchor={point,relative,relativePoint,x,y}end
+down=true;event.handler(event,'MODIFIER_STATE_CHANGED','LSHIFT',1);assert(not MarketeerForeverCore.IsMarketDetailsPinned())
+down=false;event.handler(event,'MODIFIER_STATE_CHANGED','LSHIFT',0)
+clock=.3;down=true;event.handler(event,'MODIFIER_STATE_CHANGED','LSHIFT',1);assert(MarketeerForeverCore.IsMarketDetailsPinned())
+assert(marketPanel.anchor[2]==UIParent and marketPanel.anchor[4]==100 and marketPanel.anchor[5]==500)
+marketPanel.scripts.OnDragStart();assert(marketPanel.dragging);marketPanel.scripts.OnDragStop();assert(not marketPanel.dragging)
+knownPanel.entries={};for i=1,24 do knownPanel.entries[i]={'test'} end;knownPanel.offset=0
+knownPanel.scripts.OnMouseWheel(knownPanel,-1);assert(knownPanel.offset==3)
+down=false;event.handler(event,'MODIFIER_STATE_CHANGED','LSHIFT',0);assert(MarketeerForeverCore.IsMarketDetailsPinned())
+down=true;event.handler(event,'MODIFIER_STATE_CHANGED','LSHIFT',1);assert(not MarketeerForeverCore.IsMarketDetailsPinned())
 ''')
 print('Compact tooltip and vendor, crafting, loss, and profitable-price estimates passed.')
