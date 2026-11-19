@@ -4,6 +4,17 @@ The `Marketeer Forever Data Updater.exe` downloads AHledger market, trend and hi
 
 The current feed and addon target the WoW Forever client, not other game flavors. The data addon's interface version is copied from the selected MarketeerForever TOC. The reader rejects companion data older than 48 hours; a failed download leaves the last generated data file in place. Existing manually imported market tables remain supported. Old versions of the updater still install addon code and write into the main folder: replace those separately when distributing this version.
 
+## Building
+
+The updater targets .NET Framework 4.8, so users need no separate runtime. It runs without administrator rights: the WoW folder must be writable by the current Windows user, which is the default for Battle.net installs. From `Updater/`:
+
+```
+dotnet format Updater.csproj --verify-no-changes
+dotnet build Updater.csproj -c Release
+```
+
+Copy `bin/Release/Marketeer Forever Data Updater.exe` over the checked-in executable.
+
 ## Manual verification
 
 1. In a disposable Forever installation, install the updated `MarketeerForever` folder without `MarketeerForeverData` and check that the addon loads and basic auction features work.
