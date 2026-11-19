@@ -1,6 +1,16 @@
 -- Value estimates assume one unit per drop; actual quantities are not in this snapshot.
 MarketeerForeverFarmScore={}
 local F=MarketeerForeverFarmScore
+-- Expected value per successful skin; the source snapshot does not record stack sizes.
+function F.Skin(drops,getMarket)
+  if type(drops)~='table' or #drops==0 then return nil end
+  local gross,priced,classic=0,0,false
+  for _,drop in ipairs(drops) do
+    local market=getMarket(drop[1]) or {};local price=market.price;local chance=drop[2]
+    if type(price)=='number' and price>0 and type(chance)=='number' and chance>0 and chance<=100 then gross=gross+price*chance/100;priced=priced+1;if drop[4] then classic=true end end
+  end
+  return {gross=priced>0 and gross or nil,priced=priced,total=#drops,partial=priced<#drops,classic=classic}
+end
 function F.Drop(drop,price,sales)
   local percent,hits,total=drop[2],drop[3],drop[4]
   if type(percent)~='number' or type(total)~='number' or total<=0 or type(hits)~='number' or hits<0 or hits>total then return nil,nil end

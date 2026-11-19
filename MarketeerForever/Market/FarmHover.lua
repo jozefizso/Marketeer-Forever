@@ -1,7 +1,7 @@
 -- A small pinned creature card; mouse interaction is confined to this frame.
 local core=MarketeerForeverCore
 local card=CreateFrame('Frame',nil,UIParent,'BackdropTemplate')
-card:SetSize(390,266);card:SetFrameStrata('TOOLTIP');card:SetClampedToScreen(true);card:EnableMouse(true);card:SetMovable(true);card:RegisterForDrag('LeftButton')
+card:SetSize(390,359);card:SetFrameStrata('TOOLTIP');card:SetClampedToScreen(true);card:EnableMouse(true);card:SetMovable(true);card:RegisterForDrag('LeftButton')
 card:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1})
 card:SetBackdropColor(.045,.075,.055,.98);card:SetBackdropBorderColor(.28,.53,.35,1);card:Hide()
 local function text(x,y,width,font)
@@ -14,11 +14,22 @@ local valueLabel=text(14,-78,155);valueLabel:SetText('EST. LOOT VALUE / KILL')
 local value=text(14,-94,155,'GameFontNormalLarge')
 local coverage=text(180,-83,145);local age=text(180,-100,145)
 local net=text(14,-114,160)
-local divider=card:CreateTexture(nil,'ARTWORK');divider:SetColorTexture(.22,.35,.25,1);divider:SetPoint('TOPLEFT',card,'TOPLEFT',14,-135);divider:SetPoint('TOPRIGHT',card,'TOPRIGHT',-14,-135);divider:SetHeight(1)
+local skin=text(14,-132,345);local combined=text(14,-149,345)
+local skinLabel=text(14,-168,100,'GameFontNormalSmall');skinLabel:SetText('SKINNING')
+local skinIcons={}
+for i=1,8 do
+  local button=CreateFrame('Button',nil,card);button:SetSize(28,28);button:SetPoint('TOPLEFT',card,'TOPLEFT',14+(i-1)*44,-183)
+  button.icon=button:CreateTexture(nil,'ARTWORK');button.icon:SetAllPoints(button)
+  button.chance=button:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall');button.chance:SetPoint('TOP',button,'BOTTOM',0,-1)
+  button:SetScript('OnEnter',function(self)if self.itemID and GameTooltip then GameTooltip:SetOwner(self,'ANCHOR_RIGHT');GameTooltip:SetHyperlink('item:'..self.itemID);GameTooltip:Show() end end)
+  button:SetScript('OnLeave',function(self)if GameTooltip and (not GameTooltip.GetOwner or GameTooltip:GetOwner()==self) then GameTooltip:Hide() end end)
+  button:Hide();skinIcons[i]=button
+end
+local divider=card:CreateTexture(nil,'ARTWORK');divider:SetColorTexture(.22,.35,.25,1);divider:SetPoint('TOPLEFT',card,'TOPLEFT',14,-223);divider:SetPoint('TOPRIGHT',card,'TOPRIGHT',-14,-223);divider:SetHeight(1)
 local columns={{key='name',title='DROP',x=14,width=160},{key='rate',title='CHANCE',x=178,width=54},{key='price',title='AH PRICE',x=235,width=73},{key='sales',title='SALES/D',x=312,width=64}}
-for _,col in ipairs(columns) do text(col.x,-143,col.width,'GameFontNormalSmall'):SetText(col.title) end
-local lines={};for i=1,3 do local row={};for _,col in ipairs(columns) do row[col.key]=text(col.x,-160-(i-1)*17,col.width) end;lines[i]=row end
-local note=text(14,-218,315);note:SetText('|cff91a99a1 per drop; assumes sales. No deposit costs.|r')
+for _,col in ipairs(columns) do text(col.x,-231,col.width,'GameFontNormalSmall'):SetText(col.title) end
+local lines={};for i=1,3 do local row={};for _,col in ipairs(columns) do row[col.key]=text(col.x,-248-(i-1)*17,col.width) end;lines[i]=row end
+local note=text(14,-306,360);note:SetText('|cff91a99a1 per drop/skin; assumes sales. No deposits.|r')
 local shownID,shownLevel,dismissedID,dragging,userPositioned
 local toggled=false
 local function modifier()
@@ -47,7 +58,7 @@ card:SetScript('OnDragStop',function(self)
 end)
 local open=CreateFrame('Button',nil,card,'UIPanelButtonTemplate');open:SetSize(110,23);open:SetPoint('BOTTOMLEFT',card,'BOTTOMLEFT',14,10);open:SetText('Open Farm')
 open:SetScript('OnClick',function()if shownID and core.ShowFarmMonster then local id,level=shownID,shownLevel;dismissedID=id;toggled=false;card:Hide();shownID=nil;shownLevel=nil;core.ShowFarmMonster(id,level) end end)
-local moveHint=text(137,-242,210)
+local moveHint=text(137,-335,210)
 local close=CreateFrame('Button',nil,card,'UIPanelButtonTemplate');close:SetSize(25,22);close:SetPoint('TOPRIGHT',card,'TOPRIGHT',-9,-15);close:SetText('X')
 close:SetScript('OnClick',function()dismissedID=shownID;shownID=nil;toggled=false;card:Hide()end)
 local function money(n)
@@ -87,8 +98,28 @@ local function update()
     cache[itemID]={price=price,sales=a and am==verified and a.soldPerDay or nil};return cache[itemID]
   end
   local result=mob and MarketeerForeverFarmScore.Mob(mob,getMarket,true)
+  local skinDrops=MarketeerForeverFarmSkinData and MarketeerForeverFarmSkinData[id]
+  local skinResult=MarketeerForeverFarmScore.Skin(skinDrops,getMarket)
+  skinLabel:SetShown(skinDrops and #skinDrops>0 or false)
+  for i,button in ipairs(skinIcons) do
+    local drop=skinDrops and skinDrops[i]
+    if drop then
+      button.itemID=drop[1]
+      local icon=(C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(drop[1])) or (GetItemIcon and GetItemIcon(drop[1]))
+      if not icon and C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID,drop[1]) end
+      button.icon:SetTexture(icon or 134400);button.chance:SetText(string.format('%g%%',drop[2]));button:Show()
+    else button.itemID=nil;button:Hide() end
+  end
   value:SetText(result and money(result.gross) or '--')
   net:SetText('After 5% AH cut: '..(result and result.gross and money(result.gross*.95) or '--'))
+  if skinResult and skinResult.gross then
+    local partial=skinResult.partial and ' (partial)' or ''
+    skin:SetText('Skinning / successful skin: '..money(skinResult.gross)..partial..(skinResult.classic and ' (Classic data)' or ''))
+    local total=result and result.gross and (result.gross+skinResult.gross) or nil
+    local incomplete=skinResult.partial or (result and result.priced<#mob.drops)
+    combined:SetText('Loot + skin: '..(total and (money(total)..' | after cut '..money(total*.95)) or '--')..(total and incomplete and ' (partial)' or ''))
+  elseif skinResult then skin:SetText('Skinning: no scanned prices');combined:SetText('Loot + skin: unavailable')
+  else skin:SetText('Skinning: no captured data');combined:SetText('') end
   coverage:SetText(result and ('Priced: '..result.priced..' / '..#mob.drops) or 'No loot data')
   local minutes=book and type(book.observed)=='number' and math.max(0,math.floor(((GetServerTime and GetServerTime() or time())-book.observed)/60))
   age:SetText(minutes and ('Scan: '..minutes..'m ago') or 'No AH scan')

@@ -145,6 +145,7 @@ local function setupMini()
   mini:SetScript('OnEnter',function(s)GameTooltip:SetOwner(s,'ANCHOR_LEFT');GameTooltip:AddLine('Marketeer');GameTooltip:AddLine('Click: open menu | Drag: move',1,1,1);GameTooltip:Show()end);mini:SetScript('OnLeave',function()GameTooltip:Hide()end)
 end
 SLASH_MARKETEERFOREVERMENU1='/marketeer';SLASH_MARKETEERFOREVERMENU2='/ntrading';SlashCmdList.MARKETEERFOREVERMENU=function(msg)
+  if type(msg)=='string' and msg:match('^%s*debugtest%s*$') then if core.PreviewBlockedActionReport then core.PreviewBlockedActionReport() end;return end
   local drops=type(msg)=='string' and msg:match('^%s*drops%s+(.+)%s*$')
   if drops then local id=tonumber(drops:match('item:(%d+)') or drops);if id then core.ShowItemDrops(id) else print('Marketeer: use /marketeer drops followed by an item ID or link.') end;return end
   local id=type(msg)=='string' and tonumber(msg:match('item:(%d+)') or msg:match('^%s*(%d+)%s*$'));if id then core.ShowMarketHistory(id) else core.OpenTradingMenu() end
@@ -157,6 +158,7 @@ local function openItemSources(id)
   local entry=MarketeerForeverFarmLookup and MarketeerForeverFarmLookup.items[id]
   if core.HasItemRecipe and core.HasItemRecipe(id) and (not entry or #entry.drops==0) then core.ShowItemRecipes(id) else core.ShowItemDrops(id) end
 end
+core.OpenItemSourcesShortcut=openItemSources
 local function openFromLink(link)
   local id=type(link)=='string' and tonumber(link:match('item:(%d+)'))
   if id and altOnly() and not (InCombatLockdown and InCombatLockdown()) then core.ShowMarketHistory(id) end

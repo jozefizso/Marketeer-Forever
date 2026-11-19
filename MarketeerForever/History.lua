@@ -72,6 +72,10 @@ function core.CreateHistoryPanel(parent)
   end
   function itemButton:GetBagID() return self.historyBag end
   function itemButton:GetID() return self.historySlot end
+  itemButton:RegisterForClicks('RightButtonUp')
+  itemButton:SetScript('OnClick',function(_,mouseButton)
+    if mouseButton=='RightButton' and itemId and core.OpenItemSourcesShortcut then core.OpenItemSourcesShortcut(itemId) end
+  end)
   itemButton:SetScript('OnEnter',function(self)
     if not itemId or not GameTooltip then return end
     self.historyBag,self.historySlot=findBagItem(itemId)

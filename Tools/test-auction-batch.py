@@ -4,6 +4,18 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'.test-deps'))
 from lupa.lua51 import LuaRuntime
 
 source=(Path(__file__).resolve().parents[1]/'MarketeerForever/Trading.lua').read_text(encoding='utf8')
+shortcut=source[source.index('local function ownedItemShortcut('):source.index('local owned, competitions=')]
+shortcut_lua=LuaRuntime(unpack_returned_tuples=True)
+shortcut_lua.execute('''
+local alt,shift,ctrl,combat=true,false,false,false
+IsAltKeyDown=function()return alt end;IsShiftKeyDown=function()return shift end;IsControlKeyDown=function()return ctrl end;InCombatLockdown=function()return combat end
+local opened={};local core={ShowMarketHistory=function(id)opened={id,'history'}end,ShowItemDrops=function(id)opened={id,'sources'}end,ShowItemRecipes=function(id)opened={id,'recipe'}end,HasItemRecipe=function(id)return id==43 end}
+MarketeerForeverFarmLookup={items={[42]={drops={{1}}},[43]={drops={}}}}
+'''+shortcut+'''
+local row={itemKey={itemID=42}};ownedItemShortcut(row,'LeftButton');assert(opened[1]==42 and opened[2]=='history')
+ownedItemShortcut(row,'RightButton');assert(opened[2]=='sources');row.itemKey.itemID=43;ownedItemShortcut(row,'RightButton');assert(opened[2]=='recipe')
+alt=false;opened={};ownedItemShortcut(row,'LeftButton');assert(not opened[1]);alt=true;shift=true;ownedItemShortcut(row,'RightButton');assert(not opened[1]);shift=false;combat=true;ownedItemShortcut(row,'RightButton');assert(not opened[1])
+''')
 start=source.index('local function nextSelected()')
 end=source.index('local function render()',start)
 lua=LuaRuntime(unpack_returned_tuples=True)

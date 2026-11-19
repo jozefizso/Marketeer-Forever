@@ -2,13 +2,14 @@
 ## Title: Marketeer
 ## IconTexture: Interface\MoneyFrame\UI-GoldIcon
 ## Notes: Market, crafting, auction tracking and help.
-## Version: 1.0.99
+## Version: 1.1.0
 ## SavedVariables: MarketeerForeverCoreDB, MarketeerForeverMarketDB, MarketeerForeverCraftDB, NokiUnifiedCoreDB, NokiUnifiedMarketDB, NokiUnifiedCraftDB
 ## OptionalDeps: MarketeerForeverData, MarketeerMarketSnapshots, Baganator, ArkInventory, OpenMap
 Core.lua
 AuctionChat.lua
 ShoppingList.lua
 UpdaterNotice.lua
+DebugReport.lua
 History.lua
 Menu.lua
 Trading.lua
@@ -24,6 +25,7 @@ Market\RemoteData.lua
 Market\MarketActivity.lua
 Market\FarmData.lua
 Market\FarmLookupData.lua
+Market\FarmSkinData.lua
 Market\LocalVendorLocations.lua
 Market\FarmScore.lua
 Market\FarmSpawns.lua

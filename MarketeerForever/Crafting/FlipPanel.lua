@@ -372,7 +372,7 @@ local function createPanel()
     row.name=makeText(row,nil,cols[1][2],-4,cols[1][3],"GameFontHighlightSmall");row.vendor=makeText(row,nil,cols[1][2],-19,cols[1][3],"GameFontDisableSmall")
     row.selling=makeText(row,nil,cols[1][2]+273,-4,88,"GameFontHighlightSmall");row.selling:SetJustifyH("RIGHT")
     row.buy=makeText(row,nil,cols[2][2],-11,cols[2][3]);row.ah=makeText(row,nil,cols[3][2],-11,cols[3][3]);row.gain=makeText(row,nil,cols[4][2],-11,cols[4][3]);row.gain:SetTextColor(0.45,0.9,0.64);row.stackGain=makeText(row,nil,cols[5][2],-11,cols[5][3]);row.stackGain:SetTextColor(0.45,0.9,0.64);row.activity=makeText(row,nil,cols[6][2],-11,cols[6][3]);row.listed=makeText(row,nil,cols[7][2],-11,cols[7][3]);row.gap=makeText(row,nil,cols[8][2],-11,cols[8][3])
-    row:SetScript("OnEnter",function(self)if self.item and self.name.IsTruncated and self.name:IsTruncated() and GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(self.item.name);GameTooltip:Show() end end);row:SetScript("OnLeave",function()if GameTooltip then GameTooltip:Hide() end end)
+    row:SetScript("OnEnter",function(self)if self.item and MarketeerForeverCore.ShowResultItemTooltip then MarketeerForeverCore.ShowResultItemTooltip(self,self.item) end end);row:SetScript("OnLeave",function(self)if MarketeerForeverCore.HideResultItemTooltip then MarketeerForeverCore.HideResultItemTooltip(self) end end)
     row:RegisterForClicks("LeftButtonUp","RightButtonUp")
     row:SetScript("OnClick",function(self,button)
       if not self.item then return end

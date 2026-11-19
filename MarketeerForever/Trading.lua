@@ -1,5 +1,16 @@
 -- Owned auction view. Each cancellation requires a deliberate click.
 local core=MarketeerForeverCore
+local function ownedItemShortcut(item,mouseButton)
+  if not (IsAltKeyDown and IsAltKeyDown()) or (IsShiftKeyDown and IsShiftKeyDown()) or (IsControlKeyDown and IsControlKeyDown()) or (InCombatLockdown and InCombatLockdown()) then return end
+  local id=item and item.itemKey and item.itemKey.itemID
+  if (issecretvalue and issecretvalue(id)) or type(id)~='number' then return end
+  if mouseButton=='LeftButton' and core.ShowMarketHistory then core.ShowMarketHistory(id)
+  elseif mouseButton=='RightButton' then
+    local entry=MarketeerForeverFarmLookup and MarketeerForeverFarmLookup.items[id]
+    if core.HasItemRecipe and core.HasItemRecipe(id) and (not entry or #entry.drops==0) and core.ShowItemRecipes then core.ShowItemRecipes(id)
+    elseif core.ShowItemDrops then core.ShowItemDrops(id) end
+  end
+end
 local owned, competitions={},{}
 local state={queue={},index=1,search=nil,alerted=false}
 function core.IsCompetitionSearchActive() return state.search~=nil end
@@ -349,6 +360,7 @@ local function createPanel()
     row.select:SetScript("OnClick",function(self) if row.item and row.item.auctionID and not state.cancelPending then selectedAuctions[row.item.auctionID]=self:GetChecked() and true or nil;render() end end)
     row.expand=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");row.expand:SetSize(18,20);row.expand:SetPoint("TOPLEFT",row,"TOPLEFT",27,-5);row.expand:SetText("+");row.expand:SetScript("OnClick",function() if row.item then if expandedAuction==row.item.auctionID then expandedAuction=nil else expandedAuction=row.item.auctionID end;render() end end)
     row.itemHover=CreateFrame("Button",nil,row);row.itemHover:SetSize(155,22);row.itemHover:SetPoint("TOPLEFT",row,"TOPLEFT",49,-4)
+    row.itemHover:RegisterForClicks("LeftButtonUp","RightButtonUp");row.itemHover:SetScript("OnClick",function(_,mouseButton)ownedItemShortcut(row.item,mouseButton)end)
     row.icon=row.itemHover:CreateTexture(nil,"ARTWORK");row.icon:SetSize(22,22);row.icon:SetPoint("LEFT",row.itemHover,"LEFT")
     row.itemHover:SetScript("OnEnter",function(self)
       local item=row.item;if not item or not item.itemKey or not GameTooltip then return end

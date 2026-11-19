@@ -64,12 +64,29 @@ local function restorePosition()
   local pos=MarketeerForeverCoreDB and MarketeerForeverCoreDB.bagPosition
   if not bags or not pos or type(pos.x)~="number" or type(pos.y)~="number" then return end
   -- Blizzard can lay the combined bags out again when they are reopened.
-  if not canMoveBags(bags) then return end
+  if (InCombatLockdown and InCombatLockdown()) or not canMoveBags(bags) then return end
   local x,y=pos.x,pos.y
   -- Older releases saved coordinates in UIParent units.
   if pos.version~=2 then local scale=bags:GetEffectiveScale()/UIParent:GetEffectiveScale();x,y=x/scale,y/scale end
   bags:ClearAllPoints()
   bags:SetPoint("BOTTOMLEFT",UIParent,"BOTTOMLEFT",x,y)
+end
+local positionHooked,positionScheduled,positionRestoring
+local function schedulePositionRestore()
+  if positionScheduled or positionRestoring then return end
+  positionScheduled=true
+  local function apply()
+    positionScheduled=false;positionRestoring=true
+    local ok,err=pcall(restorePosition)
+    positionRestoring=false
+    if not ok and geterrorhandler then geterrorhandler()(err) end
+  end
+  if C_Timer and C_Timer.After then C_Timer.After(0,apply) else apply() end
+end
+local function hookPositionLayout()
+  if positionHooked or type(hooksecurefunc)~='function' or type(UpdateContainerFrameAnchors)~='function' then return end
+  local ok=pcall(hooksecurefunc,'UpdateContainerFrameAnchors',schedulePositionRestore)
+  if ok then positionHooked=true end
 end
 local function updateDrag(self)
   if not self.dragging or (InCombatLockdown and InCombatLockdown()) then return end
@@ -204,14 +221,14 @@ local function setup()
   display:SetScript("OnLeave",function() GameTooltip:Hide() end)
   bags:HookScript("OnShow",function()
     schedule()
-    if C_Timer and C_Timer.After then C_Timer.After(0,restorePosition) else restorePosition() end
+    schedulePositionRestore()
   end)
   schedule()
 end
 local events=CreateFrame("Frame")
 for _,event in ipairs({"PLAYER_LOGIN","ADDON_LOADED","BAG_UPDATE_DELAYED","GET_ITEM_INFO_RECEIVED","PLAYER_REGEN_ENABLED","PLAYER_REGEN_DISABLED"}) do events:RegisterEvent(event) end
 events:SetScript("OnEvent",function(_,event)
-  if event=="PLAYER_LOGIN" or event=="ADDON_LOADED" or event=="PLAYER_REGEN_ENABLED" then setupValueButton();setup();setupEllesmereButton() end
+  if event=="PLAYER_LOGIN" or event=="ADDON_LOADED" or event=="PLAYER_REGEN_ENABLED" then setupValueButton();setup();setupEllesmereButton();hookPositionLayout() end
   if event=="PLAYER_REGEN_DISABLED" and display then finishDrag(display) end
   if event=="PLAYER_LOGIN" or event=="PLAYER_REGEN_ENABLED" then restorePosition() end
   schedule()

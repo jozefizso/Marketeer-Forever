@@ -50,5 +50,10 @@ itemButton.scripts.OnEnter(itemButton);assert(usedBag and itemButton:GetBagID()=
 itemButton.scripts.OnLeave(itemButton);assert(itemButton:GetBagID()==nil)
 C_Container.GetContainerItemInfo=function() return nil end
 itemButton.scripts.OnEnter(itemButton);assert(usedLink and itemButton:GetBagID()==nil)
+local alt=false;local opened
+MarketeerForeverCore.OpenItemSourcesShortcut=function(id)if alt then opened=id end end
+itemButton.scripts.OnClick(itemButton,'RightButton');assert(not opened)
+alt=true;itemButton.scripts.OnClick(itemButton,'RightButton');assert(opened==8)
+opened=nil;itemButton.scripts.OnClick(itemButton,'LeftButton');assert(not opened)
 ''')
 print('Search scrolling and history item tooltips for bag and non-bag items passed.')

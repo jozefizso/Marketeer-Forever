@@ -4,10 +4,14 @@ from lupa.lua51 import LuaRuntime
 
 root = pathlib.Path(__file__).resolve().parents[1] / 'MarketeerForever' / 'Market'
 lua = LuaRuntime(unpack_returned_tuples=True)
-for name in ('FarmData.lua', 'FarmLookupData.lua', 'FarmScore.lua'):
+for name in ('FarmData.lua', 'FarmLookupData.lua', 'FarmSkinData.lua', 'FarmScore.lua'):
     lua.execute((root / name).read_text(encoding='utf-8'))
 lua.execute('''
 local F=MarketeerForeverFarmScore
+local skins=MarketeerForeverFarmSkinData[1548];assert(skins and #skins==2 and skins[1][1]==2318 and skins[1][2]==40 and skins[2][1]==2934 and skins[2][2]==60)
+local skin=F.Skin(skins,function(id)return {price=id==2318 and 100 or 50}end);assert(skin.gross==70 and not skin.partial and skin.priced==2)
+skin=F.Skin(skins,function(id)return {price=id==2318 and 100 or nil}end);assert(skin.gross==40 and skin.partial and skin.priced==1)
+assert(F.Skin(nil,function()end)==nil)
 local d={2589,50,50,100,false}
 local gross,fast=F.Drop(d,1000,100)
 local _,slow=F.Drop(d,1000,1)
@@ -74,6 +78,7 @@ function hasText(s) for _,o in ipairs(objects) do local t=rawget(o,'text');if ty
 function scrollSource(s) for _,o in ipairs(objects) do if rawget(o,'text')==s and rawget(o,'parent') and o.parent.scripts.OnMouseWheel then o.parent.scripts.OnMouseWheel(o.parent,-1);return true end end;return false end
 function sourceFirst() for _,o in ipairs(objects) do if rawget(o,'parent') and rawget(o.parent,'view') and o.parent.scripts.OnMouseWheel and rawget(o,'text') and o.parent:IsShown() then return o.text end end end
 function sourceAction(name) for _,o in ipairs(objects) do if rawget(o,'text')==name and rawget(o,'parent') and rawget(o.parent,'view') and o.parent:IsShown() then return o.parent.view end end end
+function skinIcon(id) for _,o in ipairs(objects) do if rawget(o,'itemID')==id and o:IsShown() and o.scripts.OnEnter then return o end end end
 function hoverAligned(header,value) local a,b;for _,o in ipairs(objects) do if rawget(o,'parent')==hoverCard then if rawget(o,'text')==header then a=o.point[4] elseif rawget(o,'text')==value then b=o.point[4] end end end;return a~=nil and a==b end
 function clickLabel(s) for _,o in ipairs(objects) do if rawget(o,'text')==s and o.scripts.OnClick then o.scripts.OnClick(o);return true end end;return false end
 function clickButtonText(s) for _,o in ipairs(objects) do if rawget(o,'text')==s and rawget(o,'parent') and o.parent.scripts.OnClick then o.parent.scripts.OnClick(o.parent);return true end end end
@@ -85,6 +90,7 @@ lua.execute((root / 'FarmLookup.lua').read_text(encoding='utf-8'))
 lua.execute("shiftDown=false;IsShiftKeyDown=function()return shiftDown end;UnitCanAttack=function()return true end;UnitGUID=function()return 'Creature-0-0-0-0-481-12345' end;captureNextFrame=true")
 lua.execute((root / 'FarmHover.lua').read_text(encoding='utf-8'))
 lua.execute("shiftDown=true;tickHover();assert(hoverCard:IsShown() and hasText('Defias Footpad') and hasText('After 5% AH cut') and hoverAligned('AH PRICE','1s 0c'));UnitCanAttack=function()return false end;tickHover();assert(hoverCard:IsShown());hoverCard.scripts.OnDragStart(hoverCard);assert(hoverCard.moving);hoverCard.scripts.OnDragStop(hoverCard);assert(not hoverCard.moving);MarketeerForeverCore.ShowFarmMonster=function(id,level) openedMob=id;openedLevel=level end;assert(clickLabel('Open Farm') and openedMob==481 and openedLevel==60 and not hoverCard:IsShown());shiftDown=false;tickHover();UnitCanAttack=function()return true end;shiftDown=true;tickHover();assert(hoverCard:IsShown());shiftDown=false;tickHover();assert(not hoverCard:IsShown());IsShiftKeyDown=function()return false end")
+lua.execute("shiftDown=true;IsShiftKeyDown=function()return shiftDown end;UnitGUID=function()return 'Creature-0-0-0-0-1548-12345' end;tickHover();local a,b=skinIcon(2318),skinIcon(2934);assert(a and b);GameTooltip.SetHyperlink=function(_,link)skinLink=link end;a.scripts.OnEnter(a);assert(skinLink=='item:2318');shiftDown=false;tickHover()")
 lua.execute((root.parent / 'Crafting' / 'CraftingCatalog.lua').read_text(encoding='utf-8'))
 lua.execute((root.parent / 'Crafting' / 'RecipeBrowser.lua').read_text(encoding='utf-8'))
 lua.execute('''
